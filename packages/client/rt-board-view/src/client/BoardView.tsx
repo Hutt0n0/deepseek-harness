@@ -1,11 +1,11 @@
 /** Board view tab: the attack-chain canvas over one session's board projection. */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { BoardViewInjected } from './contract.ts'
 import { NS } from './locales.ts'
-import { BoardCanvas, type BoardCanvasActions } from './graph/BoardCanvas.tsx'
+import { BoardCanvas, type BoardCanvasActions, type BoardFilter } from './graph/BoardCanvas.tsx'
 import css from './board.module.css'
 
 /** Props of the board tab from the conversation.view registration. */
@@ -30,6 +30,7 @@ export function BoardView({
     return map
   }, [catalog, byId])
   const cardCount = board === null ? 0 : Object.keys(board.cards).length
+  const [filter, setFilter] = useState<BoardFilter>('all')
 
   if (board === null || cardCount === 0) {
     return (
@@ -55,13 +56,35 @@ export function BoardView({
     <div className={css.root} data-rt-board="">
       <div className={css.toolbar}>
         <span>{t('board.count', { count: cardCount })}</span>
+        <span className={css.filterRow}>
+          {([['all', t('board.filterAll')], ['idea', t('board.kindIdea')], ['vuln', t('board.kindVuln')],
+            ['access', t('board.kindAccess')], ['running', t('board.filterRunning')]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`${css.filterPill}${filter === key ? ` ${css.filterPillActive}` : ''}`}
+              onClick={() => { setFilter(key) }}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
         <span className={css.legend}>
-          <span>{t('board.legendDerive')}</span>
-          <span>{t('board.legendPivot')}</span>
-          <span>{t('board.legendDim')}</span>
+          <span className={css.legendItem}>
+            <span className={`${css.legendLine} ${css.legendLineDerive}`} />
+            {t('board.legendDerive')}
+          </span>
+          <span className={css.legendItem}>
+            <span className={`${css.legendLine} ${css.legendLinePivot}`} />
+            {t('board.legendPivot')}
+          </span>
+          <span className={css.legendItem}>
+            <span className={`${css.legendLine} ${css.legendLineDim}`} />
+            {t('board.legendDim')}
+          </span>
         </span>
       </div>
-      <BoardCanvas board={board} t={t} actions={actions} />
+      <BoardCanvas board={board} t={t} actions={actions} filter={filter} />
     </div>
   )
 }

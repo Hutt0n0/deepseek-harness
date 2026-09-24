@@ -19,6 +19,32 @@
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
 }
 
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 2px 0;
+}
+
+.groupCount {
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 15px;
+}
+
 .roster {
   display: flex;
   flex-direction: column;
@@ -29,12 +55,20 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0;
   background: var(--dsw-alias-bg-layer-2);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 10px 14px;
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
   color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-panel);
+  transition: box-shadow var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 .cardMain {
@@ -44,6 +78,18 @@
   flex-direction: column;
   gap: 4px;
   cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.cardMain:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .cardHead {
@@ -54,6 +100,16 @@
 
 .name {
   font: var(--dsw-font-xs-strong-13) var(--dsw-font-family);
+}
+
+.sourceTag {
+  flex-shrink: 0;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 14px;
 }
 
 .desc {
@@ -67,18 +123,57 @@
 }
 
 .status {
-  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 16px;
+  align-self: flex-start;
 }
 
-.statusOn { color: var(--dsw-alias-state-success-primary); }
-.statusOff { color: var(--dsw-alias-label-tertiary); }
-.statusStatic { color: var(--dsw-alias-state-warn-label); }
+.statusOn {
+  color: var(--dsw-alias-state-success-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+}
 
-.cardDim { opacity: 0.6; }
+.statusOff {
+  color: var(--dsw-alias-label-tertiary);
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);
+}
+
+.statusStatic {
+  color: var(--dsw-alias-state-warn-label);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-label) 10%, transparent);
+}
+
+.cardDim {
+  opacity: 0.6;
+}
+
+/* Loading skeleton: three shimmer rows matching the roster rhythm. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonRow {
+  height: 58px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-skeleton);
+  animation: rtSkillShimmer 1.4s ease-in-out infinite;
+}
+
+.skeletonRow:nth-child(2) { animation-delay: 0.15s; }
+.skeletonRow:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes rtSkillShimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
 .empty {
   border: 1px dashed var(--dsw-alias-border-l2);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 24px;
   text-align: center;
   color: var(--dsw-alias-label-tertiary);
@@ -97,6 +192,21 @@
   gap: 10px;
   color: var(--dsw-alias-state-error-primary);
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+.errorBtn {
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.errorBtn:hover {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
 }
 
 .detailBody {
@@ -126,9 +236,24 @@
   overflow-wrap: anywhere;
 }
 
+.detailPathCode {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .detailNote {
   border-top: 1px solid var(--dsw-alias-border-l1);
   padding-top: 8px;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .errorBtn,
+  .skeletonRow {
+    animation: none;
+    transition: none;
+  }
 }

@@ -18,6 +18,14 @@ export const zh = {
   'swarm.modeOneShot': '一次性',
   'swarm.loadFailed': '蜂群目录加载失败',
   'swarm.refresh': '刷新',
+  'swarm.filterAll': '全部',
+  'swarm.filterRunning': '执行中',
+  'swarm.filterStopped': '已停',
+  'swarm.kindRecon': '侦察',
+  'swarm.kindJsint': 'JS分析',
+  'swarm.kindWeb': 'Web打点',
+  'swarm.kindPivot': '内网横向',
+  'swarm.kindOther': '工蜂',
 } as const
 
 export type SwarmKey = keyof typeof zh
@@ -38,4 +46,12 @@ export const en: Record<SwarmKey, string> = {
   'swarm.modeOneShot': 'One-shot',
   'swarm.loadFailed': 'Swarm catalog failed to load',
   'swarm.refresh': 'Refresh',
+  'swarm.filterAll': 'All',
+  'swarm.filterRunning': 'Running',
+  'swarm.filterStopped': 'Stopped',
+  'swarm.kindRecon': 'Recon',
+  'swarm.kindJsint': 'JS Intel',
+  'swarm.kindWeb': 'Web Exploit',
+  'swarm.kindPivot': 'Lateral',
+  'swarm.kindOther': 'Bee',
 }

@@ -25,6 +25,7 @@ export const zh = {
   'skills.loadFailed': '技能列表加载失败',
   'skills.retry': '重试',
   'skills.settingsFailed': '开关写入失败',
+  'skills.detailWhen': '触发时机',
 } as const
 
 export type SkillViewKey = keyof typeof zh
@@ -52,4 +53,5 @@ export const en: Record<SkillViewKey, string> = {
   'skills.loadFailed': 'Failed to load skill list',
   'skills.retry': 'Retry',
   'skills.settingsFailed': 'Failed to write the toggle',
+  'skills.detailWhen': 'When to use',
 }

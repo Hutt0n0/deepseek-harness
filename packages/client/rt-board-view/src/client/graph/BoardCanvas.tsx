@@ -27,6 +27,8 @@ export interface BoardCanvasProps {
   readonly board: BoardProjection
   readonly t: TranslateNS<typeof NS>
   readonly actions: BoardCanvasActions
+  /** Active card filter facet, owned by the toolbar above the canvas. */
+  readonly filter: BoardFilter
 }
 
 interface DragState {
@@ -34,6 +36,12 @@ interface DragState {
   readonly offsetX: number
   readonly offsetY: number
 }
+
+/** Zoom bounds: 50%–200% in fixed steps, fit computes its own factor. */
+export const ZOOM_STEPS: readonly number[] = [0.5, 0.65, 0.8, 1, 1.25, 1.5, 2]
+
+/** Board filter facet: kind-derived columns plus the running lane. */
+export type BoardFilter = 'all' | 'idea' | 'vuln' | 'access' | 'running'
 
 type BoardStatusKey = 'board.statusOpen' | 'board.statusVerifying' | 'board.statusValidated'
   | 'board.statusFalsified' | 'board.statusArchived' | 'board.statusVerified' | 'board.statusRevoked'
@@ -61,6 +69,13 @@ function severityClass(severity: string): string {
   return (severity === 'crit' ? css.detailSeverityCrit
     : severity === 'high' ? css.detailSeverityHigh
       : '') ?? ''
+}
+
+/** Whether one card matches the active filter facet. */
+function matchesFilter(card: BoardCard, filter: BoardFilter, runningIds: ReadonlySet<string>): boolean {
+  if (filter === 'all') return true
+  if (filter === 'running') return runningIds.has(card.id)
+  return card.kind === filter
 }
 
 /** The detail dialog: full card record as a bounded, scrollable document —
@@ -190,17 +205,35 @@ function CardDetail({
 /**
  * The interactive canvas. Positions live in component state (per mount,
  * session-local); the projection provides topology. Card boxes auto-size to
- * their content; edge anchors are measured from the rendered DOM.
+ * their content; edge anchors are measured from the rendered DOM. The plane
+ * zooms via transform (edges stay aligned because the SVG layer zooms with
+ * the cards); cards keep their drag coordinates in unzoomed board space.
  */
-export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
+export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
   const { main, archived } = useMemo(() => layoutBoard(board), [board])
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({})
   const [boxes, setBoxes] = useState<Record<string, CardBox>>({})
+  const [zoom, setZoom] = useState(1)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
+  const canvasRef = useRef<HTMLDivElement | null>(null)
   const [dispatch, setDispatch] = useState<{ cardId: string; shortId: string; beeId?: string; x: number; y: number } | null>(null)
   const [draft, setDraft] = useState('')
   const [detailId, setDetailId] = useState<string | null>(null)
+
+  const runningIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const item of main) {
+      if (runningBeeId(item.card, actions.beeRunning) !== undefined) ids.add(item.card.id)
+    }
+    return ids
+  }, [main, actions.beeRunning])
+
+  const visible = useMemo(
+    () => main.filter(item => matchesFilter(item.card, filter, runningIds)),
+    [main, filter, runningIds],
+  )
 
   const placed = useMemo(() => main.map(item => ({
     ...item,
@@ -233,21 +266,58 @@ export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
 
   const onPointerDown = useCallback((item: PlacedCard) => (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('button, textarea') !== null) return
-    dragRef.current = { id: item.card.id, offsetX: event.clientX - item.x, offsetY: event.clientY - item.y }
+    // Client deltas divide by zoom so drags land in unzoomed board space.
+    dragRef.current = { id: item.card.id, offsetX: (event.clientX - item.x * zoom), offsetY: (event.clientY - item.y * zoom) }
+    setSelectedId(item.card.id)
     event.currentTarget.setPointerCapture(event.pointerId)
-  }, [])
+  }, [zoom])
 
   const onPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (drag === null) return
-    setPositions(prev => ({ ...prev, [drag.id]: { x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY } }))
-  }, [])
+    setPositions(prev => ({
+      ...prev,
+      [drag.id]: {
+        x: (event.clientX - drag.offsetX) / zoom,
+        y: (event.clientY - drag.offsetY) / zoom,
+      },
+    }))
+  }, [zoom])
 
   const onPointerUp = useCallback(() => { dragRef.current = null }, [])
 
+  const stepZoom = useCallback((direction: 1 | -1) => {
+    setZoom((prev) => {
+      let index = 0
+      for (let i = 0; i < ZOOM_STEPS.length; i += 1) {
+        if ((ZOOM_STEPS[i] ?? 1) >= prev) { index = i; break }
+        index = i
+      }
+      const next = ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, index + direction))]
+      return next ?? prev
+    })
+  }, [])
+
+  const fitZoom = useCallback(() => {
+    const wrap = canvasRef.current
+    if (wrap === null || visible.length === 0) return
+    const visibleIds = new Set(visible.map(item => item.card.id))
+    const shown = placed.filter(item => visibleIds.has(item.card.id))
+    let maxX = 0
+    let maxY = 0
+    for (const item of shown) {
+      maxX = Math.max(maxX, item.x + CARD_MAX_WIDTH)
+      maxY = Math.max(maxY, item.y + 120)
+    }
+    if (maxX === 0 || maxY === 0) return
+    const factor = Math.min(wrap.clientWidth / (maxX + 40), wrap.clientHeight / (maxY + 40), 1)
+    setZoom(Math.max(ZOOM_STEPS[0] ?? 0.5, Math.round(factor * 20) / 20))
+  }, [visible, placed])
+
   const kindClass = (card: BoardCard): string =>
     (card.kind === 'idea' ? css.cardGray : card.kind === 'vuln' ? css.cardGreen : css.cardBlue) ?? ''
-  const statusLabel = (card: BoardCard): string => t(statusKey(card))
+  const chipClass = (card: BoardCard): string =>
+    (card.kind === 'idea' ? css.statusChipIdea : card.kind === 'vuln' ? css.statusChipVuln : css.statusChipAccess) ?? ''
 
   const submitDispatch = useCallback(async () => {
     if (dispatch === null || draft.trim() === '') return
@@ -263,8 +333,14 @@ export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
   const detailCard = detailId === null ? undefined : board.cards[detailId]
 
   return (
-    <div className={css.canvasWrap}>
-      <div className={css.canvas} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+    <div className={css.canvasWrap} ref={canvasRef}>
+      <div
+        className={css.canvas}
+        style={{ transform: `scale(${zoom})` }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerDown={() => { setDispatch(null) }}
+      >
         <svg className={css.edgeLayer}>
           {Object.values(board.edges).map((edge) => {
             const srcBox = boxes[edge.src]
@@ -287,6 +363,7 @@ export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
           const beeId = runningBeeId(card, actions.beeRunning)
           const hopBee = lastBeeId(card)
           const dim = isArchived(card) || card.status === 'revoked' || card.status === 'lost'
+          const hidden = !matchesFilter(card, filter, runningIds)
           return (
             <div
               key={card.id}
@@ -294,18 +371,28 @@ export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
                 if (node === null) cardRefs.current.delete(card.id)
                 else cardRefs.current.set(card.id, node)
               }}
-              className={`${css.card} ${kindClass(card)}${dim ? ` ${css.cardDim}` : ''}`}
-              style={{ left: item.x, top: item.y, maxWidth: CARD_MAX_WIDTH }}
+              className={[
+                css.card,
+                kindClass(card),
+                selectedId === card.id ? css.cardSelected : '',
+                dim ? css.cardDim : '',
+                hidden ? css.cardDim : '',
+              ].filter(part => part !== '').join(' ')}
+              style={{
+                left: item.x,
+                top: item.y,
+                maxWidth: CARD_MAX_WIDTH,
+                ...(hidden ? { pointerEvents: 'none' as const } : {}),
+              }}
               onPointerDown={onPointerDown(item)}
             >
               <div className={css.cardHead}>
                 <span className={css.shortId}>{card.shortId}</span>
-                <span className={css.kindTag}>{t(card.kind === 'idea' ? 'board.kindIdea' : card.kind === 'vuln' ? 'board.kindVuln' : 'board.kindAccess')}</span>
-                {beeId !== undefined && <span className={css.running}>{t('board.beeRunning')}</span>}
+                {beeId !== undefined && <span className={css.running}><span className={css.runningDot} />{t('board.beeRunning')}</span>}
+                <span className={`${css.statusChip} ${chipClass(card)}`}>{statusLabel(card, t)}</span>
               </div>
               <div className={css.title} title={card.title}>{card.title}</div>
               <div className={css.meta}>
-                <span>{statusLabel(card)}</span>
                 {card.ext.severity !== undefined && <span>{t('board.severity', { severity: card.ext.severity })}</span>}
                 {card.evidence.length > 0 && <span>{t('board.evidence', { count: card.evidence.length })}</span>}
                 {card.tasks.length > 0 && <span>{t('board.tasks', { count: card.tasks.length })}</span>}
@@ -343,8 +430,8 @@ export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
                       cardId: card.id,
                       shortId: card.shortId,
                       ...(beeId !== undefined ? { beeId } : {}),
-                      x: event.clientX - rect.left + 8,
-                      y: event.clientY - rect.top + 8,
+                      x: (event.clientX - rect.left) / zoom + 8,
+                      y: (event.clientY - rect.top) / zoom + 8,
                     })
                   }}
                 >
@@ -355,17 +442,27 @@ export function BoardCanvas({ board, t, actions }: BoardCanvasProps) {
           )
         })}
         {dispatch !== null && (
-          <div className={css.dispatchPop} style={{ left: dispatch.x, top: dispatch.y }}>
+          <div
+            className={css.dispatchPop}
+            style={{ left: dispatch.x, top: dispatch.y }}
+            onPointerDown={(event) => { event.stopPropagation() }}
+          >
             <div className={css.shortId}>{t('board.dispatchPrompt')} · {dispatch.shortId}</div>
             <textarea className={css.dispatchArea} value={draft} onChange={(event) => { setDraft(event.target.value) }} autoFocus />
             <div className={css.dispatchRow}>
               <button type="button" className={css.actionBtn} onClick={() => { setDispatch(null); setDraft('') }}>✕</button>
-              <button type="button" className={css.actionBtn} onClick={() => { void submitDispatch() }}>
+              <button type="button" className={css.dispatchPrimary} onClick={() => { void submitDispatch() }}>
                 {dispatch.beeId !== undefined ? t('board.dispatchToBee') : t('board.dispatchToCommander')}
               </button>
             </div>
           </div>
         )}
+      </div>
+      <div className={css.zoomBar} onPointerDown={(event) => { event.stopPropagation() }}>
+        <button type="button" className={css.zoomBtn} title="−" onClick={() => { stepZoom(-1) }}>−</button>
+        <span className={css.zoomReadout}>{Math.round(zoom * 100)}%</span>
+        <button type="button" className={css.zoomBtn} title="+" onClick={() => { stepZoom(1) }}>+</button>
+        <button type="button" className={css.zoomBtn} title={t('board.zoomFit')} onClick={() => { fitZoom() }}>⤢</button>
       </div>
       {archived.length > 0 && (
         <div className={css.archiveBand}>

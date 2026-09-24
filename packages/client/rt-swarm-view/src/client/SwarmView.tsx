@@ -1,5 +1,5 @@
 /** Swarm view: card wall over one session's subagent catalog. */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionProjectionMap, SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -14,6 +14,21 @@ interface SwarmCard {
   readonly label: string
   readonly running: boolean
   readonly timing: SessionProjectionMap['subagentTiming'] | undefined
+}
+
+/** Swarm filter facet: liveness lanes. */
+type SwarmFilter = 'all' | 'running' | 'stopped'
+
+/** Worker-kind tone inferred from the dispatch label (recon:/jsint:/web:/pivot:
+ * prefixes are the commander's own dispatch convention; the Chinese keywords
+ * are the fallback channel skill-control also uses). */
+function kindOf(label: string): 'recon' | 'jsint' | 'web' | 'pivot' | 'other' {
+  const lower = label.toLowerCase()
+  if (lower.startsWith('recon:') || /(^|\W)侦察蜂?(\W|$)/.test(label)) return 'recon'
+  if (lower.startsWith('jsint:') || /js\s*分析|js分析/.test(label)) return 'jsint'
+  if (lower.startsWith('web:') || /打点/.test(label)) return 'web'
+  if (lower.startsWith('pivot:') || /横向/.test(label)) return 'pivot'
+  return 'other'
 }
 
 /** Format an active-turn duration in compact human units. */
@@ -58,6 +73,7 @@ export function SwarmView({
 }: ConvViewProps & InjectFace<SwarmViewInjected> & PropsLocale<typeof NS>) {
   const byId = useSessions(state => state.byId)
   const catalog = useSessions(state => state.subagentsByParent[sessionId])
+  const [filter, setFilter] = useState<SwarmFilter>('all')
   // While this wall is mounted it is a live catalog consumer: registration
   // makes membership events (a bee spawning, settling) refetch this parent's
   // catalog, so cards appear without a manual refresh.
@@ -67,11 +83,37 @@ export function SwarmView({
   }, [watch, sessionId])
   const cards = useMemo(() => deriveCards(catalog, byId), [catalog, byId])
   const runningCount = cards.filter(card => card.running).length
+  const visible = useMemo(() => cards.filter((card) => {
+    if (filter === 'all') return true
+    return filter === 'running' ? card.running : !card.running
+  }), [cards, filter])
+  const kindKey = (kind: ReturnType<typeof kindOf>): string =>
+    (kind === 'recon' ? css.kindRecon
+      : kind === 'jsint' ? css.kindJsint
+        : kind === 'web' ? css.kindWeb
+          : kind === 'pivot' ? css.kindPivot : css.kindOther) ?? ''
+  const kindLabel = (kind: ReturnType<typeof kindOf>): string =>
+    (kind === 'recon' ? t('swarm.kindRecon')
+      : kind === 'jsint' ? t('swarm.kindJsint')
+        : kind === 'web' ? t('swarm.kindWeb')
+          : kind === 'pivot' ? t('swarm.kindPivot') : t('swarm.kindOther'))
   return (
     <div className={css.root} data-rt-swarm="">
       <div className={css.header}>
         <span>{t('swarm.count', { count: cards.length })}</span>
         {runningCount > 0 && <span className={css.runningMeta}>{t('swarm.running', { count: runningCount })}</span>}
+        <span className={css.filterRow}>
+          {([['all', t('swarm.filterAll')], ['running', t('swarm.filterRunning')], ['stopped', t('swarm.filterStopped')]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`${css.filterPill}${filter === key ? ` ${css.filterPillActive}` : ''}`}
+              onClick={() => { setFilter(key) }}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
         <button
           type="button"
           className={css.refreshBtn}
@@ -92,7 +134,7 @@ export function SwarmView({
         )
         : (
           <div className={css.wall}>
-            {cards.map(card => (
+            {visible.map(card => (
               <button
                 key={card.childId}
                 type="button"
@@ -103,6 +145,7 @@ export function SwarmView({
                 <span className={css.cardTop}>
                   <span className={card.running ? `${css.dot} ${css.dotRunning}` : css.dot} />
                   <span className={css.label}>{card.label}</span>
+                  <span className={`${css.kindTag} ${kindKey(kindOf(card.label))}`}>{kindLabel(kindOf(card.label))}</span>
                 </span>
                 <span className={css.meta}>
                   <span className={card.running ? css.runningMeta : undefined}>

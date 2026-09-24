@@ -12,11 +12,40 @@
 
 .header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   flex-shrink: 0;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.filterPill {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.filterPill:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.filterPillActive {
+  background: var(--dsw-alias-interactive-bg-active);
+  border-color: var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-primary);
 }
 
 .refreshBtn {
@@ -24,14 +53,19 @@
   border: 1px solid var(--dsw-alias-border-l2);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  border-radius: 6px;
+  border-radius: 999px;
   padding: 2px 10px;
   font: var(--dsw-font-xxs-12) var(--dsw-font-family);
   cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
 .refreshBtn:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-border-l3);
 }
 
 .wall {
@@ -46,18 +80,21 @@
   flex-direction: column;
   gap: 8px;
   text-align: left;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0;
   background: var(--dsw-alias-bg-layer-2);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 12px;
   cursor: pointer;
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
   color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-panel);
+  transition: box-shadow var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
 .card:hover {
-  border-color: var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-1);
+  transform: translateY(-1px);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 .card:focus-visible {
@@ -81,6 +118,12 @@
 
 .dotRunning {
   background: var(--dsw-alias-state-success-primary);
+  animation: rtSwarmPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rtSwarmPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .label {
@@ -88,6 +131,40 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.kindTag {
+  flex-shrink: 0;
+  margin-left: auto;
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  border-radius: 999px;
+  padding: 0 8px;
+  line-height: 16px;
+}
+
+.kindRecon {
+  color: var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
+}
+
+.kindJsint {
+  color: var(--dsw-alias-state-warn-label);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-label) 10%, transparent);
+}
+
+.kindWeb {
+  color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+}
+
+.kindPivot {
+  color: var(--dsw-alias-state-success-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+}
+
+.kindOther {
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);
 }
 
 .meta {
@@ -104,7 +181,7 @@
 
 .empty {
   border: 1px dashed var(--dsw-alias-border-l2);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 24px;
   text-align: center;
   color: var(--dsw-alias-label-tertiary);
@@ -123,4 +200,14 @@
   gap: 10px;
   color: var(--dsw-alias-state-error-primary);
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .filterPill,
+  .refreshBtn,
+  .dotRunning {
+    animation: none;
+    transition: none;
+  }
 }

@@ -10,12 +10,40 @@
 
 .toolbar {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   padding: 10px 16px 6px;
   flex-shrink: 0;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filterPill {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.filterPill:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.filterPillActive {
+  background: var(--dsw-alias-interactive-bg-active);
+  border-color: var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-primary);
 }
 
 .legend {
@@ -26,17 +54,100 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legendLine {
+  width: 14px;
+  height: 0;
+  border-top: 2px solid;
+  border-radius: 2px;
+}
+
+.legendLineDerive {
+  border-top-style: dashed;
+  border-top-color: var(--dsw-alias-state-success-primary);
+}
+
+.legendLinePivot {
+  border-top-style: dotted;
+  border-top-color: var(--dsw-alias-label-tertiary);
+}
+
+.legendLineDim {
+  border-top-color: var(--dsw-alias-border-l2);
+}
+
+/* ── Canvas surface ───────────────────────────────────────────────────────
+ * The wrap scrolls; the canvas plane carries a dot-grid "operations desk"
+ * background sized in zoomed pixels so the grid scales with content. */
+
 .canvasWrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
   position: relative;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .canvas {
   position: relative;
   min-width: 100%;
   min-height: 100%;
+  transform-origin: 0 0;
+  background-image: radial-gradient(var(--dsw-alias-border-l2) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ── Zoom controls ────────────────────────────────────────────────────────
+ * Floating bottom-right cluster: zoom out / readout / in / fit. */
+
+.zoomBar {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-panel);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+}
+
+.zoomBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.zoomBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.zoomReadout {
+  min-width: 42px;
+  text-align: center;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
 }
 
 .edgeLayer {
@@ -45,34 +156,80 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+  overflow: visible;
 }
+
+/* ── Card nodes ───────────────────────────────────────────────────────────
+ * Hairline-stroke panel shadow instead of a hard border; hover lifts the
+ * card and brightens the stroke; selected carries a brand ring. */
 
 .card {
   position: absolute;
   width: max-content;
   max-width: 260px;
   min-width: 150px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 10px;
+  border: 0;
+  border-radius: 12px;
   padding: 10px 12px;
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-1);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-panel);
   cursor: grab;
   user-select: none;
   touch-action: none;
+  transition: box-shadow var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 .card:active {
   cursor: grabbing;
+  transform: translateY(0);
 }
 
-.cardGray { border-left: 3px solid var(--dsw-alias-label-tertiary); }
-.cardGreen { border-left: 3px solid var(--dsw-alias-state-success-primary); }
-.cardBlue { border-left: 3px solid var(--dsw-alias-state-business-primary); }
+.cardSelected {
+  box-shadow: var(--dsw-elevation-prominent), 0 0 0 2px var(--dsw-alias-state-business-primary);
+}
 
-.cardDim { opacity: 0.55; }
+.cardGray { box-shadow: var(--dsw-elevation-panel), inset 3px 0 0 0 var(--dsw-alias-label-tertiary); }
+.cardGreen { box-shadow: var(--dsw-elevation-panel), inset 3px 0 0 0 var(--dsw-alias-state-success-primary); }
+.cardBlue { box-shadow: var(--dsw-elevation-panel), inset 3px 0 0 0 var(--dsw-alias-state-business-primary); }
+
+.cardGray:hover {
+  box-shadow: var(--dsw-elevation-prominent), inset 3px 0 0 0 var(--dsw-alias-label-tertiary);
+}
+.cardGreen:hover {
+  box-shadow: var(--dsw-elevation-prominent), inset 3px 0 0 0 var(--dsw-alias-state-success-primary);
+}
+.cardBlue:hover {
+  box-shadow: var(--dsw-elevation-prominent), inset 3px 0 0 0 var(--dsw-alias-state-business-primary);
+}
+
+.cardGray.cardSelected {
+  box-shadow: var(--dsw-elevation-prominent), inset 3px 0 0 0 var(--dsw-alias-label-tertiary),
+    0 0 0 2px var(--dsw-alias-state-business-primary);
+}
+.cardGreen.cardSelected {
+  box-shadow: var(--dsw-elevation-prominent), inset 3px 0 0 0 var(--dsw-alias-state-success-primary),
+    0 0 0 2px var(--dsw-alias-state-business-primary);
+}
+.cardBlue.cardSelected {
+  box-shadow: var(--dsw-elevation-prominent), inset 3px 0 0 0 var(--dsw-alias-state-business-primary),
+    0 0 0 2px var(--dsw-alias-state-business-primary);
+}
+
+.cardDim {
+  opacity: 0.55;
+}
+
+.cardDim .cardTitle {
+  text-decoration: line-through;
+}
 
 .cardHead {
   display: flex;
@@ -89,6 +246,29 @@
 .kindTag {
   font: var(--dsw-font-xxs-12) var(--dsw-font-family);
   color: var(--dsw-alias-label-tertiary);
+}
+
+.statusChip {
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 16px;
+  margin-left: auto;
+}
+
+.statusChipIdea {
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);
+}
+
+.statusChipVuln {
+  color: var(--dsw-alias-state-success-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+}
+
+.statusChipAccess {
+  color: var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
 }
 
 .title {
@@ -110,7 +290,23 @@
 }
 
 .running {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--dsw-alias-state-success-primary);
+}
+
+.runningDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: rtBoardPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rtBoardPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .actions {
@@ -124,17 +320,25 @@
   border: 1px solid var(--dsw-alias-border-l2);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  border-radius: 6px;
-  padding: 2px 8px;
+  border-radius: 999px;
+  padding: 2px 9px;
   font: var(--dsw-font-xxs-12) var(--dsw-font-family);
   cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
 .actionBtn:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-border-l3);
 }
 
-/* Edge flow: dash-offset keyframes for the derive (fast) and pivot (slow) lanes. */
+/* ── Edges ────────────────────────────────────────────────────────────────
+ * Hairline base lanes; flow overlays stay but at reduced saturation via
+ * color-mix so the board reads as an operations map, not a highlighter. */
+
 @keyframes rtBoardFlow {
   to { stroke-dashoffset: -24; }
 }
@@ -146,17 +350,18 @@
 .edgeBase {
   fill: none;
   stroke: var(--dsw-alias-border-l2);
-  stroke-width: 1.5;
+  stroke-width: 1;
+  transition: stroke var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
 .edgeDerive {
-  stroke: var(--dsw-alias-state-success-primary);
-  stroke-width: 2;
+  stroke: color-mix(in srgb, var(--dsw-alias-state-success-primary) 45%, transparent);
+  stroke-width: 1.25;
 }
 
 .edgeFlow {
   fill: none;
-  stroke: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  stroke: var(--dsw-alias-state-business-primary);
   stroke-width: 2;
   stroke-dasharray: 6 18;
   stroke-linecap: round;
@@ -176,11 +381,14 @@
   stroke-width: 1;
 }
 
+/* ── Archive band ───────────────────────────────────────────────────────── */
+
 .archiveBand {
   margin: 8px 16px 16px;
   border: 1px dashed var(--dsw-alias-border-l2);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 10px 12px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 55%, transparent);
 }
 
 .archiveTitle {
@@ -198,7 +406,7 @@
 .archiveCard {
   width: 200px;
   border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 8px 10px;
   font: var(--dsw-font-xxs-12) var(--dsw-font-family);
   color: var(--dsw-alias-label-tertiary);
@@ -230,18 +438,27 @@
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
 }
 
+/* ── Dispatch popover ───────────────────────────────────────────────────── */
+
 .dispatchPop {
   position: absolute;
   z-index: 20;
-  width: 280px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-1);
-  padding: 10px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+  width: 300px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-2);
+  padding: 12px;
+  box-shadow: var(--dsw-elevation-prominent);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  animation: rtBoardPopIn 0.12s var(--ds-ease-in-out);
+  transform-origin: top left;
+}
+
+@keyframes rtBoardPopIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .dispatchArea {
@@ -250,10 +467,16 @@
   resize: vertical;
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-2);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 6px;
-  padding: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 6px 8px;
+  transition: border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.dispatchArea:focus {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
 }
 
 .dispatchRow {
@@ -262,6 +485,25 @@
   justify-content: flex-end;
 }
 
+.dispatchPrimary {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+  transition: filter var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.dispatchPrimary:hover {
+  filter: brightness(1.08);
+}
+
+/* ── Card detail dialog layout ────────────────────────────────────────────
+ * Applied through Modal's className/contentClassName: the platform dialog
+ * defaults to a 380px fixed-width card; a pentest record needs a wide,
+ * viewport-bounded document with its own scroll region. */
 
 .detailBody {
   display: flex;
@@ -321,8 +563,8 @@
   font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
   color: var(--dsw-alias-label-secondary);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
-  padding: 0 4px;
+  border-radius: 999px;
+  padding: 0 7px;
   flex-shrink: 0;
 }
 
@@ -332,17 +574,12 @@
 }
 
 .detailPath {
-  font-family: var(--dsw-font-family);
-  font-size: var(--dsw-font-xxs-12);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
   overflow-wrap: anywhere;
 }
-
-
-/* ── Card detail dialog layout ────────────────────────────────────────────
- * Applied through Modal's className/contentClassName: the platform dialog
- * defaults to a 380px fixed-width card; a pentest record needs a wide,
- * viewport-bounded document with its own scroll region. */
 
 .detailDialog {
   width: min(720px, 92vw);
@@ -373,15 +610,41 @@
 }
 
 .detailBadgeIdea { color: var(--dsw-alias-label-secondary); }
-.detailBadgeVuln { color: var(--dsw-alias-state-success-primary); border-color: var(--dsw-alias-state-success-primary); }
-.detailBadgeAccess { color: var(--dsw-alias-state-business-primary); border-color: var(--dsw-alias-state-business-primary); }
+.detailBadgeVuln {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+}
+.detailBadgeAccess {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
+}
 
 .detailSeverityHigh { color: var(--dsw-alias-state-warn-label); }
-.detailSeverityCrit { color: var(--dsw-alias-state-error-primary); }
+.detailSeverityCrit {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+}
 
 .detailTitle {
   margin: 0 0 8px;
-  font: var(--dsw-font-md-strong-15, 600 15px/22px var(--dsw-font-family)) var(--dsw-font-family);
+  font: var(--dsw-font-base-strong-16) var(--dsw-font-family);
   color: var(--dsw-alias-label-primary);
   overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .actionBtn,
+  .filterPill,
+  .zoomBtn,
+  .dispatchPop,
+  .edgeFlow,
+  .edgeFlowSlow,
+  .runningDot {
+    animation: none;
+    transition: none;
+  }
 }
