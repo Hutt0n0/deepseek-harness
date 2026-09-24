@@ -1,0 +1,387 @@
+/* Board view: token-driven attack-chain canvas. All colors resolve through --dsw-alias-* so skins follow. */
+
+.root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+.legend {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.canvasWrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.canvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.edgeLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.card {
+  position: absolute;
+  width: max-content;
+  max-width: 260px;
+  min-width: 150px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.card:active {
+  cursor: grabbing;
+}
+
+.cardGray { border-left: 3px solid var(--dsw-alias-label-tertiary); }
+.cardGreen { border-left: 3px solid var(--dsw-alias-state-success-primary); }
+.cardBlue { border-left: 3px solid var(--dsw-alias-state-business-primary); }
+
+.cardDim { opacity: 0.55; }
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.shortId {
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kindTag {
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.title {
+  font: var(--dsw-font-xs-strong-13) var(--dsw-font-family);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.running {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  cursor: pointer;
+}
+
+.actionBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Edge flow: dash-offset keyframes for the derive (fast) and pivot (slow) lanes. */
+@keyframes rtBoardFlow {
+  to { stroke-dashoffset: -24; }
+}
+
+@keyframes rtBoardFlowSlow {
+  to { stroke-dashoffset: -12; }
+}
+
+.edgeBase {
+  fill: none;
+  stroke: var(--dsw-alias-border-l2);
+  stroke-width: 1.5;
+}
+
+.edgeDerive {
+  stroke: var(--dsw-alias-state-success-primary);
+  stroke-width: 2;
+}
+
+.edgeFlow {
+  fill: none;
+  stroke: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  stroke-width: 2;
+  stroke-dasharray: 6 18;
+  stroke-linecap: round;
+  animation: rtBoardFlow 1.2s linear infinite;
+}
+
+.edgeFlowSlow {
+  stroke: var(--dsw-alias-label-tertiary);
+  stroke-dasharray: 3 9;
+  stroke-width: 1.5;
+  animation: rtBoardFlowSlow 2.4s linear infinite;
+}
+
+.edgeDim {
+  stroke: var(--dsw-alias-border-l1);
+  stroke-dasharray: 2 6;
+  stroke-width: 1;
+}
+
+.archiveBand {
+  margin: 8px 16px 16px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.archiveTitle {
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  margin-bottom: 8px;
+}
+
+.archiveGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archiveCard {
+  width: 200px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.7;
+}
+
+.archiveCardTitle {
+  text-decoration: line-through;
+  margin-bottom: 2px;
+}
+
+.empty {
+  margin: 40px auto;
+  max-width: 420px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.error {
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 16px;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+.dispatchPop {
+  position: absolute;
+  z-index: 20;
+  width: 280px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  padding: 10px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dispatchArea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.dispatchRow {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+
+.detailBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary);
+}
+
+.detailGrid dt {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  padding-top: 2px;
+}
+
+.detailGrid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.detailSection {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  padding-top: 8px;
+}
+
+.detailHeading {
+  margin: 0 0 6px;
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.detailList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+}
+
+.detailList li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detailEvidenceKind {
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.detailEvidenceText {
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.detailPath {
+  font-family: var(--dsw-font-family);
+  font-size: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+
+/* ── Card detail dialog layout ────────────────────────────────────────────
+ * Applied through Modal's className/contentClassName: the platform dialog
+ * defaults to a 380px fixed-width card; a pentest record needs a wide,
+ * viewport-bounded document with its own scroll region. */
+
+.detailDialog {
+  width: min(720px, 92vw);
+  max-height: min(86vh, 860px);
+}
+
+.detailDialogContent {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Keep the close button reachable while the body scrolls under it. */
+  padding-bottom: 8px;
+}
+
+.detailHeaderMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0 0 4px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.detailBadge {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.detailBadgeIdea { color: var(--dsw-alias-label-secondary); }
+.detailBadgeVuln { color: var(--dsw-alias-state-success-primary); border-color: var(--dsw-alias-state-success-primary); }
+.detailBadgeAccess { color: var(--dsw-alias-state-business-primary); border-color: var(--dsw-alias-state-business-primary); }
+
+.detailSeverityHigh { color: var(--dsw-alias-state-warn-label); }
+.detailSeverityCrit { color: var(--dsw-alias-state-error-primary); }
+
+.detailTitle {
+  margin: 0 0 8px;
+  font: var(--dsw-font-md-strong-15, 600 15px/22px var(--dsw-font-family)) var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
