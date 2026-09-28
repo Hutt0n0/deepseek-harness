@@ -26,6 +26,14 @@ export const zh = {
   'skills.retry': '重试',
   'skills.settingsFailed': '开关写入失败',
   'skills.detailWhen': '触发时机',
+  'skills.beeTitle': '工蜂技能配置',
+  'skills.beeKindBee': '工蜂',
+  'skills.beeHint': '按工种勾选分配给该蜂的技能；保存后新创建的蜂生效（配置写入 rt-skills.beeSkills，蜂创建时全文注入其作战条令）。',
+  'skills.beeEmpty': '蜂群编制为空或未加载 — 在「蜂群编制」页建立工蜂后即可在此分配技能。',
+  'skills.beeNone': '该工种暂未分配技能',
+  'skills.beeSave': '保存配置',
+  'skills.beeSaved': '已保存 — 新创建的该工种蜂将携带勾选的技能',
+  'skills.beeSaving': '保存中…',
 } as const
 
 export type SkillViewKey = keyof typeof zh
@@ -54,4 +62,12 @@ export const en: Record<SkillViewKey, string> = {
   'skills.retry': 'Retry',
   'skills.settingsFailed': 'Failed to write the toggle',
   'skills.detailWhen': 'When to use',
+  'skills.beeTitle': 'Bee skill assignment',
+  'skills.beeKindBee': 'Bee',
+  'skills.beeHint': 'Check the skills each bee kind carries; saving applies to newly created bees (written to rt-skills.beeSkills and injected into the bee\'s doctrine at creation).',
+  'skills.beeEmpty': 'The bee fleet is empty or not loaded — create bees on the Bee Fleet page to assign skills here.',
+  'skills.beeNone': 'No skills assigned to this kind yet',
+  'skills.beeSave': 'Save assignment',
+  'skills.beeSaved': 'Saved — newly created bees of this kind will carry the checked skills',
+  'skills.beeSaving': 'Saving…',
 }

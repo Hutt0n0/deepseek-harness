@@ -59,16 +59,28 @@ export interface SkillViewInjected {
   readonly settings: SettingsScope<RtSkillsSettings>
   /** Load this session's skill entries from the Host. */
   readonly loadSkills: () => Promise<readonly SkillEntry[]>
+  /** Live fleet kinds (follows the Bee Fleet page's line-up). */
+  readonly loadFleetKinds: () => Promise<readonly string[]>
+  /** Current per-kind skill assignments (keys are fleet kinds). */
+  readonly loadBeeSkills: () => Promise<Record<string, readonly string[]>>
+  /** Persist one kind's assignment. */
+  readonly saveBeeSkills: (bee: string, skills: readonly string[]) => Promise<void>
 }
 
 /** The management roster for one session. */
 export function SkillView({
-  settings, loadSkills, t,
+  settings, loadSkills, loadFleetKinds, loadBeeSkills, saveBeeSkills, t,
 }: SkillViewProps) {
   const [entries, setEntries] = useState<readonly SkillEntry[] | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
   const [detail, setDetail] = useState<SkillRow | undefined>(undefined)
   const [pending, setPending] = useState<readonly string[]>([])
+  // Per-bee configurator state: fleet kinds, assignments, per-kind drafts.
+  const [fleetKinds, setFleetKinds] = useState<readonly string[]>([])
+  const [assignments, setAssignments] = useState<Record<string, readonly string[]>>({})
+  const [drafts, setDrafts] = useState<Record<string, readonly string[]>>({})
+  const [beeSaving, setBeeSaving] = useState<readonly string[]>([])
+  const [toast, setToast] = useState<string | undefined>(undefined)
 
   const settingsSnapshot = settings.getSnapshot()
   const disabledList = useMemo(
@@ -95,6 +107,56 @@ export function SkillView({
   useEffect(() => {
     return reload()
   }, [reload])
+
+  // Per-bee configurator: load fleet kinds + current assignments once, and
+  // refresh the drafts whenever entries or assignments settle.
+  const loadBeeConfig = useCallback(() => {
+    const cancelled = { current: false }
+    void (async () => {
+      try {
+        const [kinds, current] = await Promise.all([loadFleetKinds(), loadBeeSkills()])
+        if (!cancelled.current) {
+          setFleetKinds(kinds)
+          setAssignments(current)
+          setDrafts(current)
+        }
+      } catch {
+        // A missing fleet is a normal empty state, not an error banner.
+        if (!cancelled.current) setFleetKinds([])
+      }
+    })()
+    return () => { cancelled.current = true }
+  }, [loadFleetKinds, loadBeeSkills])
+
+  useEffect(() => { return loadBeeConfig() }, [loadBeeConfig, entries])
+
+  useEffect(() => {
+    if (toast === undefined) return
+    const timer = setTimeout(() => { setToast(undefined) }, 3600)
+    return () => { clearTimeout(timer) }
+  }, [toast])
+
+  const toggleKindSkill = useCallback((kind: string, skillName: string): void => {
+    setDrafts((prev) => {
+      const current = prev[kind] ?? []
+      const next = current.includes(skillName)
+        ? current.filter(name => name !== skillName)
+        : [...current, skillName]
+      return { ...prev, [kind]: next }
+    })
+  }, [])
+
+  const saveKind = useCallback((kind: string) => {
+    setBeeSaving(prev => [...prev, kind])
+    void saveBeeSkills(kind, drafts[kind] ?? []).then(() => {
+      setAssignments(prev => ({ ...prev, [kind]: drafts[kind] ?? [] }))
+      setToast(t('skills.beeSaved'))
+    }, (cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }).finally(() => {
+      setBeeSaving(prev => prev.filter(item => item !== kind))
+    })
+  }, [drafts, saveBeeSkills, t])
 
   const toggle = useCallback((name: string, next: boolean) => {
     setPending(prev => [...prev, name])
@@ -198,6 +260,66 @@ export function SkillView({
           </div>
         </section>
       ))}
+      {(fleetKinds.length > 0 || entries !== undefined) && (
+        <section className={css.beeSection} data-rt-skill-bees="">
+          <div className={css.beeHead}>
+            <span>{t('skills.beeTitle')}</span>
+          </div>
+          <span className={css.beeHint}>{t('skills.beeHint')}</span>
+          {fleetKinds.length === 0
+            ? <div className={css.empty}>{t('skills.beeEmpty')}</div>
+            : (
+              <div className={css.beeRows}>
+                {fleetKinds.map((kind) => {
+                  const draft = drafts[kind] ?? []
+                  const saved = assignments[kind] ?? []
+                  const dirty = draft.length !== saved.length
+                    || draft.some(name => !saved.includes(name))
+                  return (
+                    <div key={kind} className={css.beeRow}>
+                      <div className={css.beeRowHead}>
+                        <span className={css.beeKind}>{kind}</span>
+                        <span className={css.beeKindTag}>{t('skills.beeKindBee')}</span>
+                        <span className={css.beeRowActions}>
+                          {draft.length === 0 && <span className={css.beeNone}>{t('skills.beeNone')}</span>}
+                          <button
+                            type="button"
+                            className={css.beeSaveBtn}
+                            disabled={!dirty || beeSaving.includes(kind)}
+                            onClick={() => { saveKind(kind) }}
+                          >
+                            {beeSaving.includes(kind) ? t('skills.beeSaving') : t('skills.beeSave')}
+                          </button>
+                        </span>
+                      </div>
+                      <span className={css.beeSkillChips}>
+                        {(entries ?? []).map((entry) => {
+                          const off = !entry.modelInvocable && !disabledList.has(entry.name)
+                          const checked = draft.includes(entry.name)
+                          return (
+                            <button
+                              key={entry.name}
+                              type="button"
+                              className={[
+                                css.beeChip,
+                                checked ? css.beeChipOn : '',
+                                off ? css.beeChipDisabled : '',
+                              ].filter(part => part !== '').join(' ')}
+                              title={off ? t('skills.modelBlocked') : entry.description}
+                              onClick={() => { if (!off) toggleKindSkill(kind, entry.name) }}
+                            >
+                              {entry.name}
+                            </button>
+                          )
+                        })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+        </section>
+      )}
       {detail !== undefined && (
         <Modal
           open

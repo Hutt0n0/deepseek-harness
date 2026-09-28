@@ -49,11 +49,38 @@ export function apply(ctx: ClientContext): void {
     return wire.items as import('./contract.ts').SkillEntry[]
   }
 
+  /** Live fleet kinds for the per-bee configurator (follows the Bee Fleet page). */
+  const loadFleetKinds = async () => {
+    const response = await fetch('/rt-skills/fleetKinds', { method: 'POST' })
+    const wire = await response.json() as { ok: boolean; kinds?: unknown; error?: string }
+    if (!wire.ok) throw new Error(wire.error ?? 'fleet kinds failed')
+    return (wire.kinds ?? []) as readonly string[]
+  }
+
+  /** Current per-kind skill assignments (keys are fleet kinds). */
+  const loadBeeSkills = async () => {
+    const response = await fetch('/rt-skills/beeSkills', { method: 'POST' })
+    const wire = await response.json() as { ok: boolean; beeSkills?: unknown; error?: string }
+    if (!wire.ok) throw new Error(wire.error ?? 'bee skills failed')
+    return (wire.beeSkills ?? {}) as Record<string, readonly string[]>
+  }
+
+  /** Persist one kind's assignment. */
+  const saveBeeSkills = async (bee: string, skills: readonly string[]) => {
+    const response = await fetch('/rt-skills/setBeeSkills', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bee, skills }),
+    })
+    const wire = await response.json() as { ok: boolean; error?: string }
+    if (!wire.ok) throw new Error(wire.error ?? 'save failed')
+  }
+
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main',
     key: PANEL_ID,
     locale: NS,
-    inject: () => ({ settings, loadSkills }),
+    inject: () => ({ settings, loadSkills, loadFleetKinds, loadBeeSkills, saveBeeSkills }),
   }, SkillView))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist',

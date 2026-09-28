@@ -79,6 +79,8 @@ export interface SkillRoutesDeps {
   readonly setBeeSkills: (bee: string, names: readonly string[]) => Promise<void>
   /** Read the current per-bee assignments. */
   readonly beeSkills: () => Promise<Record<string, readonly string[]>>
+  /** Live fleet kinds (from the bee fleet YAML) gating setBeeSkills writes. */
+  readonly fleetKinds: () => readonly string[]
 }
 
 /** Build the prefix-route handler for /rt-skills/<method>. */
@@ -116,9 +118,15 @@ export function handleSkillRoute(deps: SkillRoutesDeps): (req: IncomingMessage, 
         const body = await readJson(req)
         const bee = typeof body.bee === 'string' ? body.bee : ''
         const names = Array.isArray(body.skills) ? body.skills.filter((n): n is string => typeof n === 'string') : []
-        if (!['recon', 'jsint', 'web', 'pivot'].includes(bee)) throw new Error(`unknown bee kind "${bee}"`)
+        if (!deps.fleetKinds().includes(bee)) {
+          throw new Error(`unknown bee kind "${bee}" — fleet kinds: ${deps.fleetKinds().join(', ') || '(fleet empty)'}`)
+        }
         await deps.setBeeSkills(bee, names)
         writeJson(res, 200, { ok: true })
+        return
+      }
+      if (method === 'fleetKinds') {
+        writeJson(res, 200, { ok: true, kinds: deps.fleetKinds() })
         return
       }
       writeJson(res, 404, { ok: false, error: `unknown method "${method}"` })

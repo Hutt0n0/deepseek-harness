@@ -202,6 +202,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         await settingsScope.replace({ beeSkills: { ...current, [bee]: [...names].sort() } })
       },
       beeSkills: () => Promise.resolve(settingsScope.get().beeSkills as unknown as Record<string, readonly string[]>),
+      fleetKinds: () => [...fleetBees().map(bee => bee.kind)],
     }),
   })
 
