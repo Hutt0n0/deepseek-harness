@@ -393,14 +393,31 @@ export function apply(ctx: Context): void {
         const writer = writerFor(exec)
         let taskId = args.taskId
         if (taskId === undefined && args.beeSessionId !== undefined) {
-          const cardNow = writer.board()?.cards[args.cardId]
-          const open = cardNow?.tasks.find(task => task.beeSessionId === args.beeSessionId && task.outcome === undefined)
-          if (open === undefined) {
-            const failRecord: JsonRecord = { ok: false, error: `no open dispatch for bee "${args.beeSessionId}" on this card` }
+          // Settle by bee: resolve through the board's open dispatches across
+          // ALL cards (the bee's dispatch may ride any card; the cardId the
+          // commander names is advisory — the board owns the truth).
+          const board = writer.board()
+          const candidates = Object.values(board?.cards ?? {})
+            .flatMap(card => card.tasks.map(task => ({ card, task })))
+            .filter(({ task }) => task.beeSessionId === args.beeSessionId && task.outcome === undefined)
+          if (candidates.length === 0) {
+            const failRecord: JsonRecord = { ok: false, error: `no open dispatch for bee "${args.beeSessionId}" on this board` }
+            const cardNow = board?.cards[args.cardId]
             if (cardNow !== undefined) failRecord.card = cardSummary(cardNow)
             return Promise.resolve(failRecord)
           }
-          taskId = open.id
+          const open = candidates.at(0)
+          if (open === undefined) {
+            const failRecord: JsonRecord = { ok: false, error: `no open dispatch for bee "${args.beeSessionId}" on this board` }
+            const cardNow = board?.cards[args.cardId]
+            if (cardNow !== undefined) failRecord.card = cardSummary(cardNow)
+            return Promise.resolve(failRecord)
+          }
+          taskId = open.task.id
+          // Realign the cardId to the dispatch's actual card so settleTask's
+          // index cross-check passes.
+          const realigned: JsonRecord = { ...args, cardId: open.card.id, taskId }
+          args = realigned as typeof args
         }
         if (taskId === undefined) return Promise.resolve({ ok: false, error: 'provide taskId or beeSessionId' })
         const card = writer.settleTask(args.cardId, taskId, args.outcome)

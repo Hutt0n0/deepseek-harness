@@ -125,6 +125,18 @@ export interface BoardProjection {
   readonly cards: Readonly<Record<string, BoardCard>>
   /** Edges by id. */
   readonly edges: Readonly<Record<string, BoardEdge>>
+  /**
+   * Per-kind short-id counters (RT/VL/AX → last issued number). Folded from
+   * every card.put: derived from the log, not from any writer's memory, so
+   * short ids stay unique across process restarts and writer instances.
+   */
+  readonly counters: Readonly<Record<string, number>>
+  /**
+   * Task id → card id index. Folded from every task.record, so settlement
+   * resolves the owning card from the log alone — never from a stale
+   * projection snapshot.
+   */
+  readonly taskIndex: Readonly<Record<string, string>>
   /** Seq of the last folded `board/op` event; 0 before any. */
   readonly seq: number
 }

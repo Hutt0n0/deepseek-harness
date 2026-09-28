@@ -35,33 +35,51 @@ export type {
 * @module @dsh-redteam/dsh-session-board
 */
 const boardProjectionSchema = { parse: (value: unknown) => value } as unknown as ZodType<BoardProjection | null>
+/** Short-id prefix for one card kind. */
+function shortIdPrefix(kind: BoardCard['kind']): string {
+  return kind === 'idea' ? 'RT' : kind === 'vuln' ? 'VL' : 'AX'
+}
 /**
-* The `board` projection unit: fold `board/op` events last-wins into the
-* whole board. Uninterested events return the same state reference.
-*/
+ * The `board` projection unit: fold `board/op` events last-wins into the
+ * whole board. The fold also maintains two derived indexes — the per-kind
+ * short-id counters and the task→card index — so both are functions of the
+ * event log alone (stateVersion 2: the log-derived counters replace the
+ * writer-instance counters that issued every card the same short id).
+ * Uninterested events return the same state reference.
+ */
 const boardProjectionDefinition = {
   key: 'board',
-  stateVersion: 1,
+  stateVersion: 2,
   stateSchema: boardProjectionSchema,
   init: (_header: SessionHeader, _inherited: SessionLogOffset): BoardProjection | null => null,
   apply: (state: BoardProjection | null, event: SessionEvent): BoardProjection | null => {
     if (event.type !== 'board/op') return state
     const cards = state?.cards ?? {}
     const edges = state?.edges ?? {}
+    const counters = state?.counters ?? {}
+    const taskIndex = state?.taskIndex ?? {}
     const data = event.data
     let next
     switch (data.op) {
-      case 'card.put':
+      case 'card.put': {
+        const prefix = shortIdPrefix(data.card.kind)
+        const cardNumber = Number.parseInt(data.card.shortId.slice(prefix.length + 1), 10)
+        const issued = Number.isFinite(cardNumber) ? Math.max(counters[prefix] ?? 0, cardNumber) : (counters[prefix] ?? 0)
         next = {
           cards: { ...cards, [data.card.id]: data.card },
           edges,
+          counters: { ...counters, [prefix]: issued },
+          taskIndex,
           seq: event.seq,
         } as BoardProjection
         break
+      }
       case 'edge.put':
         next = {
           cards,
           edges: { ...edges, [data.edge.id]: data.edge },
+          counters,
+          taskIndex,
           seq: event.seq,
         } as BoardProjection
         break
@@ -70,6 +88,8 @@ const boardProjectionDefinition = {
         next = {
           ...state,
           cards: { ...cards, [data.cardId]: data.card },
+          counters,
+          taskIndex: { ...taskIndex, [data.task.id]: data.cardId },
           seq: event.seq,
         } as BoardProjection
         break
@@ -118,7 +138,6 @@ export interface TransitionPatch {
 export class BoardWriter {
   private readonly session: Session
   private readonly registry: SessionProjectionRegistry
-  private counters = new Map<string, number>()
   constructor(session: Session, registry: SessionProjectionRegistry) {
     this.session = session
     this.registry = registry
@@ -127,11 +146,16 @@ export class BoardWriter {
   board(): BoardProjection | null {
     return this.registry.stateOf(this.session, 'board') ?? null
   }
-  /** Next short id for a card kind (RT-1, VL-2, AX-3 — per-kind counter). */
+  /**
+   * Next short id for a card kind (RT-1, VL-2, AX-3 — per-kind counter).
+   * The counter lives in the projection (log-derived), not in this writer:
+   * writers are per-tool-call instances, so an instance counter re-issued
+   * `RT-1` on every call. The projection fold also derives the counter from
+   * each card.put's own shortId, so the two stays consistent.
+   */
   private nextShortId(kind: BoardCard['kind']): string {
-    const prefix = kind === 'idea' ? 'RT' : kind === 'vuln' ? 'VL' : 'AX'
-    const next = (this.counters.get(prefix) ?? 0) + 1
-    this.counters.set(prefix, next)
+    const prefix = shortIdPrefix(kind)
+    const next = (this.board()?.counters[prefix] ?? 0) + 1
     return `${prefix}-${next}`
   }
   /** Mint a fresh unique id with the given prefix (time-ordered via timestamp+counter). */
@@ -293,15 +317,43 @@ export class BoardWriter {
       taskId,
     }
   }
-  /** Settle a dispatched task (outcome recorded on its TaskRef). */
+  /**
+   * Settle a dispatched task (outcome recorded on its TaskRef). The owning
+   * card resolves through the projection's task→card index (log-derived), so
+   * a stale cardId cannot misdirect the settlement: the caller-supplied
+   * cardId must agree with the index, and the task must exist on the
+   * indexed card — anything else fails loud with the exact mismatch.
+   */
   settleTask(cardId: string, taskId: string, outcome: BoardTaskRef['outcome']): BoardCard {
-    const card = this.requireCard(cardId)
-    const tasks = card.tasks.map(task => task.id === taskId ? {
-      ...task,
-      ...outcome === void 0 ? {} : { outcome },
-      settledAt: Date.now(),
-    } : task)
-    if (tasks.length === card.tasks.length) throw new BoardOpInvalidError(`board: unknown task "${taskId}" on card "${card.shortId}"`)
+    const board = this.board()
+    const indexedCardId = board?.taskIndex[taskId]
+    if (indexedCardId === undefined) {
+      throw new BoardOpInvalidError(`board: unknown task "${taskId}" — no dispatch record on this board (was board_dispatch called for it?)`)
+    }
+    if (indexedCardId !== cardId) {
+      const indexed = board?.cards[indexedCardId]
+      throw new BoardOpInvalidError(
+        `board: task "${taskId}" belongs to card ${indexed?.shortId ?? indexedCardId}, not "${cardId}" — re-check the dispatch record`,
+      )
+    }
+    const card = this.requireCard(indexedCardId)
+    let found = false
+    const tasks = card.tasks.map((task) => {
+      if (task.id !== taskId) return task
+      found = true
+      return {
+        ...task,
+        ...outcome === void 0 ? {} : { outcome },
+        settledAt: Date.now(),
+      }
+    })
+    /* The index above guarantees the task exists, so this guard never fires
+    in honest operation — it stays as a fold/implementation divergence
+    tripwire. The previous check here (`tasks.length === card.tasks.length`)
+    was ALWAYS true — map preserves length — so every settle in the first
+    engagement threw "unknown task" and the bees fell back to evidence notes. */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    if (!found) throw new BoardOpInvalidError(`board: unknown task "${taskId}" on card "${card.shortId}"`)
     const allSettled = tasks.every(task => task.outcome !== void 0)
     const status = card.kind === 'idea' && card.status === 'verifying' && allSettled ? 'open' : card.status
     const updated = {
