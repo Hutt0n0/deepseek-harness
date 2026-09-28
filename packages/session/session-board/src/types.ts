@@ -27,8 +27,12 @@ export interface BoardSurface {
 export type VulnSeverity = 'info' | 'low' | 'med' | 'high' | 'crit'
 /** Privilege level of an access card. */
 export type AccessLevel = 'anon' | 'app-low' | 'webshell' | 'service' | 'local-admin' | 'root' | 'domain-user' | 'domain-admin'
-/** Bee kind that a dispatch assigns (mirrors the commander preset's bee line-up). */
-export type BoardBeeKind = 'recon' | 'jsint' | 'web' | 'pivot'
+/**
+ * Bee kind that a dispatch assigns. Deliberately an open string: the fleet
+ * line-up is live configuration (fleet.yaml), so the board cannot hold a
+ * closed union — unknown kinds render with a neutral badge on the client.
+ */
+export type BoardBeeKind = string
 /** Outcome of one dispatched task, settled by the commander. */
 export type BoardTaskOutcome = 'done' | 'stopped' | 'aborted'
 /** One dispatch from a card to a bee. */

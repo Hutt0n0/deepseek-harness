@@ -11,7 +11,7 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import { BoardWriter, BoardOpInvalidError } from './index.ts'
 import type {
-  BoardBeeKind, BoardCard, BoardEvidence, BoardSurface,
+  BoardCard, BoardEvidence, BoardSurface,
 } from './types.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
@@ -136,11 +136,12 @@ export function apply(ctx: Context): void {
     name: 'board_dispatch',
     description:
       'Record a dispatch from a card to a bee and flip an open idea to verifying. Call AFTER starting '
-      + 'the bee via subagent_* (one bee per card unless force). The bee kind must match the work: '
-      + 'recon maps surfaces, enum verifies hypotheses, exploit fires PoCs.',
+      + 'the bee via subagent_* (one bee per card unless force). beeKind is the fleet kind of the '
+      + 'dispatched bee — use the kind matching the subagent_* tool you started (e.g. recon / jsint '
+      + '/ web / pivot or any kind added on the Bee Fleet page); it is recorded verbatim on the card.',
     parameters: {
       cardId: { type: 'string', required: true, description: 'Card id the dispatch rides on' },
-      beeKind: { type: 'string', required: true, enum: ['recon', 'enum', 'exploit'] },
+      beeKind: { type: 'string', required: true, description: 'Fleet kind of the dispatched bee (e.g. recon, jsint, web, pivot — or any kind in the current fleet)' },
       beeSessionId: { type: 'string', required: true, description: 'Durable session id of the dispatched bee (from the subagent_* result)' },
       brief: { type: 'string', required: true, description: 'Task brief as dispatched' },
       force: { type: 'string', description: 'Set "adversarial-double-check" to allow a second bee on a verifying idea' },
@@ -163,7 +164,7 @@ export function apply(ctx: Context): void {
           })
         }
         const result = writer.recordTask(args.cardId, {
-          beeKind: args.beeKind as BoardBeeKind,
+          beeKind: args.beeKind,
           beeSessionId: args.beeSessionId,
           brief: args.brief,
         })
