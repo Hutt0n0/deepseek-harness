@@ -6,12 +6,9 @@
  */
 /** Settings namespace owning the runtime enable/disable state of skills. */
 export const RT_SKILLS_SETTINGS_NAMESPACE = 'rt-skills'
-/** One bee kind's assigned skill names. */
+/** One bee kind's assigned skill names. Keys are fleet kinds (open set). */
 export interface BeeSkillAssignment {
-  readonly recon?: readonly string[]
-  readonly jsint?: readonly string[]
-  readonly web?: readonly string[]
-  readonly pivot?: readonly string[]
+  readonly [kind: string]: readonly string[] | undefined
 }
 /** Settings document for `rt-skills`: global disables + per-bee assignments. */
 export interface RtSkillsSettings {

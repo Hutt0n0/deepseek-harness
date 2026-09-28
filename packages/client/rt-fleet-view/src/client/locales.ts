@@ -1,0 +1,63 @@
+/** Fleet view copy: zh is the key-set source of truth; en must match exactly. */
+
+export const NS = 'rtFleet'
+
+export const zh = {
+  'view.fleet': '蜂群编制',
+  'fleet.count': '{count} 只工蜂',
+  'fleet.empty': '编制为空。点击「新增工蜂」建立第一只蜂。',
+  'fleet.addBee': '新增工蜂',
+  'fleet.save': '保存编制',
+  'fleet.saved': '已保存并热重载 — 新会话用新编制，运行中蜂不受影响',
+  'fleet.saveFailed': '保存失败',
+  'fleet.loadFailed': '蜂群编制加载失败',
+  'fleet.retry': '重试',
+  'fleet.toolName': '派单工具名',
+  'fleet.kind': '工种',
+  'fleet.backgroundMode': '会话模式',
+  'fleet.modeContinuable': '持续会话',
+  'fleet.modeOneShot': '一次性',
+  'fleet.persona': '作战条令（persona）',
+  'fleet.toolbox': '工具箱',
+  'fleet.toolboxHint': '勾选该蜂可用的工具；留空保存会被拒绝',
+  'fleet.remove': '删除',
+  'fleet.removeConfirm': '删除该蜂？运行中的蜂会继续存活至结算，但新会话不再挂载此工具。',
+  'fleet.duplicateTool': '派单工具名重复',
+  'fleet.duplicateKind': '工种重复',
+  'fleet.invalidName': '名称必须是字母开头的字母/数字/下划线',
+  'fleet.personaRequired': '作战条令不能为空',
+  'fleet.expand': '展开编辑',
+  'fleet.collapse': '收起',
+  'fleet.maxDepthNote': '递归深度锁定为 1：蜂不能再派蜂（编制安全红线）。',
+} as const
+
+export type FleetKey = keyof typeof zh
+
+export const en: Record<FleetKey, string> = {
+  'view.fleet': 'Bee Fleet',
+  'fleet.count': '{count} bees',
+  'fleet.empty': 'The fleet is empty. Add the first bee to begin.',
+  'fleet.addBee': 'Add bee',
+  'fleet.save': 'Save fleet',
+  'fleet.saved': 'Saved and hot-reloaded — new sessions use the new fleet; running bees are unaffected',
+  'fleet.saveFailed': 'Save failed',
+  'fleet.loadFailed': 'Failed to load the bee fleet',
+  'fleet.retry': 'Retry',
+  'fleet.toolName': 'Dispatch tool name',
+  'fleet.kind': 'Kind',
+  'fleet.backgroundMode': 'Session mode',
+  'fleet.modeContinuable': 'Continuable',
+  'fleet.modeOneShot': 'One-shot',
+  'fleet.persona': 'Persona (operating doctrine)',
+  'fleet.toolbox': 'Toolbox',
+  'fleet.toolboxHint': 'Check the tools this bee may use; an empty toolbox is rejected on save',
+  'fleet.remove': 'Remove',
+  'fleet.removeConfirm': 'Remove this bee? Running bees keep living until settlement, but new sessions will not mount this tool.',
+  'fleet.duplicateTool': 'Duplicate dispatch tool name',
+  'fleet.duplicateKind': 'Duplicate kind',
+  'fleet.invalidName': 'Names must start with a letter and use letters/digits/underscores',
+  'fleet.personaRequired': 'The persona must not be empty',
+  'fleet.expand': 'Edit',
+  'fleet.collapse': 'Collapse',
+  'fleet.maxDepthNote': 'Recursion depth is locked to 1: bees cannot dispatch bees (fleet safety line).',
+}

@@ -1,0 +1,36 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../skill"
+    },
+    {
+      "path": "../skill-filesystem"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../client/connection/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../subagent/subagent"
+    }
+  ]
+}

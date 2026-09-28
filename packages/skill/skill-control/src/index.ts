@@ -16,7 +16,11 @@
  * @module @dsh-redteam/dsh-skill-control
  */
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { parse } from 'yaml'
 import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: resolves ctx.agents events (agent/created), the projection face,
 // and the `subagent` projection key's SessionProjectionMap augmentation.
 import type { SubagentIdentityProjection } from '@deepseek-ai/dsh-subagent'
@@ -95,14 +99,12 @@ function controlProvider(
 export function apply(ctx: Context, config: Config = {}): void {
   const settingsScope = ctx.settings.register(RT_SKILLS_SETTINGS_NAMESPACE, z.object({
     disabled: z.array(z.string()).default([]),
-    beeSkills: z.object({
-      recon: z.array(z.string()).default([]),
-      jsint: z.array(z.string()).default([]),
-      web: z.array(z.string()).default([]),
-      pivot: z.array(z.string()).default([]),
-    }),
+    // Keys are fleet kinds — an open set synced with the bee fleet's YAML.
+    // Runtime z.dict(string-array) is exact; the schema helper's TS overload
+    // is single-argument, so keep the schema untyped at the helper boundary.
+    beeSkills: z.dict(z.array(z.string())),
   }), {
-    base: { disabled: [], beeSkills: { recon: [], jsint: [], web: [], pivot: [] } },
+    base: { disabled: [], beeSkills: {} },
   })
   let fsProvider: FileSystemSkillProvider | undefined
   let providerControl: SkillProviderControl | undefined
@@ -199,29 +201,55 @@ export function apply(ctx: Context, config: Config = {}): void {
         const current = settingsScope.get().beeSkills
         await settingsScope.replace({ beeSkills: { ...current, [bee]: [...names].sort() } })
       },
-      beeSkills: () => Promise.resolve(settingsScope.get().beeSkills),
+      beeSkills: () => Promise.resolve(settingsScope.get().beeSkills as unknown as Record<string, readonly string[]>),
     }),
   })
 
-  ctx.on('agent/created', ({ agent }): undefined | Promise<undefined> => {
+  /** toolName → (kind, persona) from the bee fleet's YAML (same source of
+   * truth the fleet mounts from). Refreshed lazily on each use — reads are tiny. */
+  const fleetBees = (): readonly { readonly toolName: string; readonly kind: string; readonly persona: string }[] => {
     try {
+      const file = join(config.projectCwd ?? process.cwd(), 'fleet', 'fleet.yaml')
+      const parsed = parse(readFileSync(file, 'utf8')) as {
+        bees?: readonly { toolName?: unknown; kind?: unknown; persona?: unknown }[]
+      }
+      return (parsed.bees ?? []).flatMap(bee =>
+        typeof bee.toolName === 'string' && typeof bee.kind === 'string' && typeof bee.persona === 'string'
+          ? [{ toolName: bee.toolName, kind: bee.kind, persona: bee.persona }]
+          : [])
+    } catch {
+      // A missing/unreadable fleet file means no kind channel; the label
+      // fallback below still applies.
+      return []
+    }
+  }
+  /** Legacy label-prefix recognition for bees mounted outside the fleet. */
+  const kindFromLabel = (label: string): string | undefined =>
+    label.startsWith('recon:') || /(^|\W)侦察蜂?(\W|$)/.test(label) ? 'recon'
+      : label.startsWith('jsint:') || /JS分析/.test(label) ? 'jsint'
+        : label.startsWith('web:') || /打点/.test(label) ? 'web'
+          : label.startsWith('pivot:') || /横向/.test(label) ? 'pivot'
+            : undefined
+
+  ctx.on('agent/created', ({ agent }): undefined | Promise<undefined> => {
+    const run = async (): Promise<undefined> => {
       const header = agent.session.header
-      if (header.delegationDepth !== 1 || header.origin !== 'subagent') return
-      // Durable identity via the `subagent` projection unit (last-wins
-      // descriptor fold) — not a synchronous history scan.
-      const projections = agent.ctx.get('sessionProjections')
-      const identity: SubagentIdentityProjection | null | undefined =
-        projections === undefined ? undefined : projections.snapshot(agent.session, ['subagent']).values.subagent
-      if (identity === undefined || identity === null) return
-      const label = identity.label ?? ''
-      const kind = label.startsWith('recon:') || /(^|\W)侦察蜂?(\W|$)/.test(label) ? 'recon'
-        : label.startsWith('jsint:') || /JS分析/.test(label) ? 'jsint'
-          : label.startsWith('web:') || /打点/.test(label) ? 'web'
-            : label.startsWith('pivot:') || /横向/.test(label) ? 'pivot'
-              : undefined
-      if (kind === undefined) return
-      const assigned = settingsScope.get().beeSkills[kind].filter(skillName => !disabledSet().has(skillName))
-      if (assigned.length === 0) return
+      if (header.delegationDepth !== 1 || header.origin !== 'subagent') return undefined
+      // Kind channel: the child's persona IS the dispatching tool's persona
+      // (child-agent installs it as `deployment:persona-prefix`), so matching
+      // it against the fleet YAML resolves toolName → kind structurally — no
+      // label-prefix discipline required. The label heuristic covers
+      // out-of-fleet bees.
+      const assembly = await agent.ctx.systemPrompt.assemble()
+      const personaText = assembly.sections
+        .find(section => section.name === 'deployment:persona-prefix')?.text ?? ''
+      const fleet = fleetBees()
+      const byPersona = fleet.find(bee => bee.persona === personaText)
+      const kind = byPersona?.kind ?? kindFromLabel(identityLabel(agent))
+      if (kind === undefined) return undefined
+      const assignments = settingsScope.get().beeSkills[kind] as readonly string[] | undefined
+      const assigned = (assignments ?? []).filter((skillName: string) => !disabledSet().has(skillName))
+      if (assigned.length === 0) return undefined
       if (contentCache.size === 0) refreshCache()
       for (const skillName of assigned) {
         const definition = contentCache.get(skillName)
@@ -232,8 +260,17 @@ export function apply(ctx: Context, config: Config = {}): void {
           text: `<assigned_skill name="${definition.name}">\n${definition.content}\n</assigned_skill>`,
         })
       }
-    } catch (error) {
-      ctx.logger.warn(`rt-skill-control: agent/created handler failed: ${error instanceof Error ? error.message : String(error)}`)
     }
+    return run().catch((error: unknown): undefined => {
+      ctx.logger.warn(`rt-skill-control: agent/created handler failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
   })
+}
+
+/** Durable creation label of one freshly created subagent, from the identity projection. */
+function identityLabel(agent: Agent): string {
+  const projections = agent.ctx.get('sessionProjections')
+  const identity: SubagentIdentityProjection | null | undefined =
+    projections === undefined ? undefined : projections.snapshot(agent.session, ['subagent']).values.subagent
+  return identity === undefined || identity === null ? '' : (identity.label ?? '')
 }

@@ -1,0 +1,31 @@
+{
+  "name": "@dsh-redteam/dsh-bee-fleet",
+  "description": "红队蜂群编制域包：以配置为源动态挂载/卸载 tool-subagent 蜂实例（编制、persona、工具箱），附部署级 /rt-fleet 管理路由",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-tool-subagent": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "yaml": "^2.9.0"
+  }
+}
