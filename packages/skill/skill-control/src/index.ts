@@ -34,6 +34,7 @@ import type {
   SkillProviderObservation,
 } from '@deepseek-ai/dsh-skill'
 import { handleSkillRoute } from './routes.ts'
+import { apply as applyAssignTools } from './assign-tools.ts'
 import { RT_SKILLS_SETTINGS_NAMESPACE } from './types.ts'
 
 export type { RtSkillsSettings, SkillControlItem } from './types.ts'
@@ -43,7 +44,7 @@ export const CONTROL_PROVIDER_NAME = 'rt-skill-control'
 
 export const name = 'rt-skill-control'
 
-export const inject = ['settings', 'skills', 'webServer', 'webRuntime'] as const
+export const inject = ['settings', 'skills', 'webServer', 'webRuntime', 'tools'] as const
 
 
 export interface Config {
@@ -106,6 +107,13 @@ export function apply(ctx: Context, config: Config = {}): void {
   }), {
     base: { disabled: [], beeSkills: {} },
   })
+  // Commander-side assignment tools over the same rt-skills channel, in this
+  // plugin's own fiber (a nested ctx.plugin here would leave the Loader entry
+  // "never started" — the mount audit waits on the subtree, and the nested
+  // plugin's own tool registration races the parent's inject resolution).
+  // The registered scope passes directly: the settings provider has no
+  // public by-namespace lookup.
+  applyAssignTools(ctx, config, settingsScope)
   let fsProvider: FileSystemSkillProvider | undefined
   let providerControl: SkillProviderControl | undefined
   const disabledSet = (): ReadonlySet<string> => new Set(settingsScope.get().disabled)
