@@ -106,6 +106,43 @@ describe('board writer (log-derived state)', () => {
     expect(() => a.writer.settleTask('i_nonexistent', t2, 'done')).toThrow(/belongs to card/)
   })
 
+  it('suggestCard issues suggested cards carrying the proposing bee', () => {
+    const a = makeHarness()
+    const card = a.writer.suggestCard({
+      kind: 'idea', title: 'Use SSRF to reach localhost admin',
+      surface: { host: 'target' }, hypothesis: 'SSRF to 127.0.0.1:8080',
+      rationale: 'Notification URL accepts arbitrary hosts (evidence: oob_hits.log)',
+      suggestedBy: 'session-bee-1',
+    })
+    expect(card.status).toBe('suggested')
+    expect(card.ext.suggestedBy).toBe('session-bee-1')
+    expect(card.ext.suggestionRationale).toContain('oob_hits.log')
+    // Short id continues the RT sequence alongside commander cards.
+    const commanderCard = a.writer.putCard(ideaInit, 'commander')
+    expect(commanderCard.shortId).toBe('RT-2')
+  })
+
+  it('suggestions deduplicate against existing idea cards', () => {
+    const a = makeHarness()
+    a.writer.putCard({ ...ideaInit, title: 'Same title' }, 'commander')
+    expect(() => a.writer.suggestCard({
+      kind: 'idea', title: 'Same title', surface: { host: 'h1' },
+      hypothesis: 'h', rationale: 'r', suggestedBy: 'session-bee-1',
+    })).toThrow(/already has this hypothesis/)
+  })
+
+  it('suggestions reject non-idea kinds and empty rationale', () => {
+    const a = makeHarness()
+    expect(() => a.writer.suggestCard({
+      kind: 'vuln', title: 't', surface: { host: 'h' },
+      hypothesis: 'h', rationale: 'r', suggestedBy: 'b',
+    })).toThrow(/suggestions are idea cards/)
+    expect(() => a.writer.suggestCard({
+      kind: 'idea', title: 't', surface: { host: 'h' },
+      hypothesis: 'h', rationale: '  ', suggestedBy: 'b',
+    })).toThrow(/requires a rationale/)
+  })
+
   it('never-dispatched tasks fail loud with a dispatch hint', () => {
     const a = makeHarness()
     const card = a.writer.putCard(ideaInit, 'commander')

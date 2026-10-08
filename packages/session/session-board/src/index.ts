@@ -146,6 +146,11 @@ export class BoardWriter {
   board(): BoardProjection | null {
     return this.registry.stateOf(this.session, 'board') ?? null
   }
+  /** The projection registry this writer folds against — lets a bee-side
+   * suggestion construct a commander-session writer over the same registry. */
+  registryOf(): SessionProjectionRegistry {
+    return this.registry
+  }
   /**
    * Next short id for a card kind (RT-1, VL-2, AX-3 — per-kind counter).
    * The counter lives in the projection (log-derived), not in this writer:
@@ -167,6 +172,19 @@ export class BoardWriter {
     if (card === void 0) throw new BoardOpInvalidError(`board: unknown card "${cardId}"`)
     return card
   }
+  /** Duplicate guard shared by putCard and suggestCard: one card per
+   * kind+title+surface, so the queue never holds two cards for the same
+   * hypothesis on the same target. */
+  private requireNoDuplicate(kind: BoardCard['kind'], title: string, surface: BoardSurface, existingMessage: string): void {
+    const board = this.board()
+    const sameSurface = (card: BoardCard): boolean =>
+      card.surface.host === surface.host
+      && (card.surface.port ?? undefined) === (surface.port ?? undefined)
+      && (card.surface.path ?? undefined) === (surface.path ?? undefined)
+    const dup = (Object.values(board?.cards ?? {})).find(card =>
+      card.kind === kind && card.title === title && sameSurface(card))
+    if (dup !== void 0) throw new BoardOpInvalidError(existingMessage.replaceAll('{shortId}', dup.shortId))
+  }
   private append(data: BoardOpData): void {
     this.session.append('board/op', data)
   }
@@ -177,14 +195,7 @@ export class BoardWriter {
   putCard(init: BoardCardInit, actor: 'commander' | 'user', evidence: readonly BoardEvidence[] = []): BoardCard {
     if (init.kind === 'idea' && (init.hypothesis === void 0 || init.hypothesis.trim() === '')) throw new BoardOpInvalidError('board: an idea card requires a falsifiable hypothesis (预期验证手段)')
     if (init.kind !== 'idea' && evidence.length === 0) throw new BoardOpInvalidError(`board: a ${init.kind} card requires at least one evidence item`)
-    const board = this.board()
-    const sameSurface = (card: BoardCard): boolean =>
-      card.surface.host === init.surface.host
-      && (card.surface.port ?? undefined) === (init.surface.port ?? undefined)
-      && (card.surface.path ?? undefined) === (init.surface.path ?? undefined)
-    const dup = (Object.values(board?.cards ?? {})).find(card =>
-      card.kind === init.kind && card.title === init.title && sameSurface(card))
-    if (dup !== void 0) throw new BoardOpInvalidError(`board: duplicate ${init.kind} card "${dup.shortId}" already covers this surface+title; merge or reuse it`)
+    this.requireNoDuplicate(init.kind, init.title, init.surface, `board: duplicate ${init.kind} card "{shortId}" already covers this surface+title; merge or reuse it`)
     const status = init.kind === 'idea' ? 'open' : init.kind === 'vuln' ? 'verified' : 'held'
     const card: BoardCard = {
       id: this.mint(init.kind === 'idea' ? 'i' : init.kind === 'vuln' ? 'v' : 'a'),
@@ -217,7 +228,53 @@ export class BoardWriter {
     })
     return card
   }
-  /** Create a derive edge (idea→vuln / vuln→access), tombstoning the source as materialized. */
+  /**
+   * Create one bee-authored suggestion card (`suggested` status, awaiting
+   * the commander's adjudication). The proposing bee is recorded in ext so
+   * the commander can jump to its transcript before judging. Suggestions
+   * never enter dispatch while suggested — adoption flips them to `open`
+   * via the ordinary transition path.
+   */
+  suggestCard(init: {
+    readonly kind: BoardCard['kind']
+    readonly title: string
+    readonly surface: BoardSurface
+    readonly hypothesis: string
+    readonly rationale: string
+    readonly suggestedBy: string
+    readonly detail?: string
+  }): BoardCard {
+    if (init.kind !== 'idea') throw new BoardOpInvalidError('board: suggestions are idea cards (gray) — only the commander promotes to vuln/access')
+    if (init.title.trim() === '') throw new BoardOpInvalidError('board: a suggestion requires a one-line title')
+    if (init.rationale.trim() === '') throw new BoardOpInvalidError('board: a suggestion requires a rationale (what you saw that makes this worth a follow-up)')
+    this.requireNoDuplicate('idea', init.title, init.surface, 'board: suggestion duplicates existing idea card "{shortId}"; the commander already has this hypothesis')
+    const card: BoardCard = {
+      id: this.mint('i'),
+      kind: 'idea',
+      title: init.title.slice(0, 80),
+      shortId: this.nextShortId('idea'),
+      detail: (init.detail ?? '').slice(0, 2e3),
+      surface: init.surface,
+      status: 'suggested',
+      origin: {
+        actor: 'commander',
+        sessionId: init.suggestedBy,
+        ts: Date.now(),
+      },
+      evidence: [],
+      tasks: [],
+      ext: {
+        hypothesis: init.hypothesis,
+        suggestedBy: init.suggestedBy,
+        suggestionRationale: init.rationale.slice(0, 1e3),
+      },
+    }
+    this.append({
+      op: 'card.put',
+      card,
+    })
+    return card
+  }
   deriveEdge(srcId: string, dstId: string, evidenceIds: readonly string[]): BoardEdge {
     const src = this.requireCard(srcId)
     const dst = this.requireCard(dstId)

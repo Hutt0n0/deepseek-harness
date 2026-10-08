@@ -9,6 +9,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
+import type { Session } from '@deepseek-ai/dsh-session'
 import { BoardWriter, BoardOpInvalidError } from './index.ts'
 import type {
   BoardCard, BoardEvidence, BoardSurface,
@@ -92,11 +93,77 @@ function cardSummary(card: BoardCard): JsonRecord {
     surface: { ...card.surface },
     evidenceCount: card.evidence.length,
     taskCount: card.tasks.length,
+    // Suggestion queue fields: the proposing bee and its rationale surface in
+    // the readback so the commander can adjudicate without opening the modal.
+    ...(card.ext.suggestedBy !== undefined ? { suggestedBy: card.ext.suggestedBy } : {}),
+    ...(card.ext.suggestionRationale !== undefined ? { suggestionRationale: card.ext.suggestionRationale } : {}),
   }
 }
 
 export function apply(ctx: Context): void {
   const writerFor = (exec: ToolRunContext): BoardWriter => writerOf(ctx, exec)
+
+  /** Bee-side guard: suggestions come from dispatched workers (depth ≥ 1).
+   * The commander authors idea cards through board_idea directly.
+   * Returns the PARENT commander session: a bee's board/op events land in
+   * its own log, invisible to the commander's per-session board projection —
+   * suggestion cards must append to the commander's log to enter the queue. */
+  function requireBee(exec: ToolRunContext): { parentSession: Session; suggestedBy: string } {
+    const agent = exec.agent
+    if (agent === undefined) throw new Error('board_suggest requires an initiating agent')
+    const depth = agent.session.header.delegationDepth ?? 0
+    if (depth === 0) {
+      throw new Error('board_suggest is for dispatched bees only — the commander puts ideas via board_idea')
+    }
+    const parentId = agent.session.header.parentSession
+    const agents = agent.ctx.get('agents') as { get: (id: string) => { session: Session } | undefined } | undefined
+    const parent = parentId === undefined ? undefined : agents?.get(parentId)
+    if (parent === undefined) {
+      throw new Error('board_suggest requires a live commander session — the parent agent is not running; report the suggestion via send_message instead')
+    }
+    return { parentSession: parent.session, suggestedBy: agent.session.id }
+  }
+
+  ctx.tools.register(defineTool({
+    name: 'board_suggest',
+    description:
+      'Bee-only: propose a follow-up hypothesis to the engagement board before closing. Use when your '
+      + 'work surfaced a lead you could not pursue inside your own task (an untested endpoint, a '
+      + 'credential path, a service that needs a different specialist). The card lands in the '
+      + 'commander\'s adjudication queue (suggested state) with your session id attached; the commander '
+      + 'adopts or archives it next planning round. NOT a way to dispatch work — you cannot task bees.',
+    parameters: {
+      title: { type: 'string', required: true, description: 'One-line follow-up hypothesis (≤80 chars)' },
+      hypothesis: { type: 'string', required: true, description: 'What exactly the follow-up should try and what result counts as success' },
+      rationale: { type: 'string', required: true, description: 'What YOU saw in this task that makes this worth pursuing (with evidence pointers)' },
+      surface: surfaceSchema,
+      detail: { type: 'string', description: 'Optional markdown context (≤2000 chars)' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: true },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    execute(args, exec) {
+      exec.signal.throwIfAborted()
+      try {
+        const { parentSession, suggestedBy } = requireBee(exec)
+        const commanderWriter = writerFor(exec)
+        const writer = new BoardWriter(parentSession, commanderWriter.registryOf())
+        const card = writer.suggestCard({
+          kind: 'idea',
+          title: args.title,
+          surface: args.surface as unknown as BoardSurface,
+          hypothesis: args.hypothesis,
+          rationale: args.rationale,
+          suggestedBy,
+          ...(args.detail !== undefined ? { detail: args.detail } : {}),
+        })
+        return Promise.resolve(ok({ card: cardSummary(card) }))
+      } catch (error) {
+        return Promise.resolve(fail(error))
+      }
+    },
+  }))
 
   ctx.tools.register(defineTool({
     name: 'board_idea',
@@ -452,8 +519,17 @@ export function apply(ctx: Context): void {
       const writer = writerFor(exec)
       const board = writer.board()
       if (board === null) return Promise.resolve(ok({ cards: [], edges: [] }))
+      const summary = Object.values(board.cards).map(cardSummary)
+      // Adjudication queue first: suggested (bee proposals awaiting a ruling),
+      // then open (adopted, not yet dispatched), then everything else — so the
+      // commander's every-round queue check reads top-down.
+      const statusRank = (card: { status: string }): number =>
+        card.status === 'suggested' ? 0 : card.status === 'open' ? 1 : 2
+      summary.sort((a, b) => statusRank(a as unknown as { status: string }) - statusRank(b as unknown as { status: string }))
+      const suggested = summary.filter(card => (card as unknown as { status: string }).status === 'suggested').length
       return Promise.resolve(ok({
-        cards: Object.values(board.cards).map(cardSummary),
+        suggestedCount: suggested,
+        cards: summary,
         edges: Object.values(board.edges).map(edge => ({ id: edge.id, type: edge.type, src: edge.src, dst: edge.dst })),
       }))
     },

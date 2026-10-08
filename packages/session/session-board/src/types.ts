@@ -9,8 +9,12 @@
 export {}
 /** Node kinds on the engagement board. The kind never changes once created. */
 export type BoardCardKind = 'idea' | 'vuln' | 'access'
-/** Lifecycle of one idea (gray) card. */
-export type IdeaStatus = 'open' | 'verifying' | 'validated' | 'falsified' | 'archived'
+/**
+ * Lifecycle of one idea (gray) card. `suggested` is a bee-authored proposal
+ * awaiting the commander's adjudication (adopt → open, or archive with a
+ * reason); it never receives a dispatch while suggested.
+ */
+export type IdeaStatus = 'suggested' | 'open' | 'verifying' | 'validated' | 'falsified' | 'archived'
 /** Lifecycle of one vuln (green) card. */
 export type VulnStatus = 'verified' | 'revoked' | 'superseded'
 /** Lifecycle of one access (blue) card. */
@@ -102,6 +106,10 @@ export interface BoardCard {
     readonly accessHost?: string
     /** access: credential fingerprint ONLY (never plaintext). */
     readonly credentialHint?: string
+    /** idea cards in `suggested` state: the proposing bee's session id. */
+    readonly suggestedBy?: string
+    /** idea cards in `suggested` state: why the bee believes this is worth a follow-up. */
+    readonly suggestionRationale?: string
   }
 }
 /** Edge types. `derive` is the hard materialization edge; `pivot` is a soft lateral idea. */
