@@ -226,9 +226,15 @@ export function apply(ctx: Context, config: Config = {}): void {
         typeof bee.toolName === 'string' && typeof bee.kind === 'string' && typeof bee.persona === 'string'
           ? [{ toolName: bee.toolName, kind: bee.kind, persona: bee.persona }]
           : [])
-    } catch {
-      // A missing/unreadable fleet file means no kind channel; the label
-      // fallback below still applies.
+    } catch (error) {
+      // A missing fleet file is normal (ENOENT → no kind channel; the label
+      // fallback below still applies). Anything else (syntax error, bad
+      // shape) is a real misconfiguration — bee-fleet will fail loud at its
+      // own mount, but make the degradation visible here too.
+      const code = (error as NodeJS.ErrnoException | null)?.code
+      if (code !== 'ENOENT') {
+        ctx.logger.warn(`rt-skill-control: fleet.yaml unreadable, kind channel degraded: ${error instanceof Error ? error.message : String(error)}`)
+      }
       return []
     }
   }
@@ -245,16 +251,21 @@ export function apply(ctx: Context, config: Config = {}): void {
       const header = agent.session.header
       if (header.delegationDepth !== 1 || header.origin !== 'subagent') return undefined
       // Kind channel: the child's persona IS the dispatching tool's persona
-      // (child-agent installs it as `deployment:persona-prefix`), so matching
-      // it against the fleet YAML resolves toolName → kind structurally — no
-      // label-prefix discipline required. The label heuristic covers
-      // out-of-fleet bees.
+      // (child-agent installs it as `deployment:persona-prefix`). Resolution
+      // order: (1) the machine kind-stamp bee-fleet embeds in the persona —
+      // survives operator persona edits; (2) full-text equality with the
+      // fleet YAML — exact match for unedited fleets; (3) label heuristic —
+      // out-of-fleet bees only.
       const assembly = await agent.ctx.systemPrompt.assemble()
       const personaText = assembly.sections
         .find(section => section.name === 'deployment:persona-prefix')?.text ?? ''
       const fleet = fleetBees()
-      const byPersona = fleet.find(bee => bee.persona === personaText)
-      const kind = byPersona?.kind ?? kindFromLabel(identityLabel(agent))
+      const stamp = /<!--\s*rt-bee-kind:([a-z][a-z0-9_]*)\s*-->/.exec(personaText)?.[1]
+      const byStamp = stamp !== undefined && fleet.some(bee => bee.kind === stamp) ? stamp : undefined
+      // Equality also tolerates the kind-stamp suffix bee-fleet appends.
+      const byPersona = fleet.find(bee => bee.persona === personaText
+        || personaText === `${bee.persona}\n\n<!-- rt-bee-kind:${bee.kind} -->`)?.kind
+      const kind = byStamp ?? byPersona ?? kindFromLabel(identityLabel(agent))
       if (kind === undefined) return undefined
       const assignments = settingsScope.get().beeSkills[kind] as readonly string[] | undefined
       const assigned = (assignments ?? []).filter((skillName: string) => !disabledSet().has(skillName))

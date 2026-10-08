@@ -72,16 +72,19 @@ export function edgePath(from: { x: number; y: number }, to: { x: number; y: num
   return `M ${from.x} ${from.y} C ${midX} ${from.y + (to.y > from.y ? bow : -bow)}, ${midX} ${to.y - (to.y > from.y ? bow : -bow)}, ${to.x} ${to.y}`
 }
 
-/** Flow class for one edge given its type and endpoint liveness. */
-export function edgeFlowClass(edge: BoardEdge, board: BoardProjection): string {
+/** Flow lane for one edge given its type and endpoint liveness. Returns a
+ * semantic key ('dim' | 'derive' | 'pivot'), NOT a css class name — the
+ * canvas maps it through the hashed CSS-modules object (a bare string like
+ * 'edgeFlowSlow' does not exist in the built stylesheet). */
+export function edgeFlowClass(edge: BoardEdge, board: BoardProjection): 'dim' | 'derive' | 'pivot' | '' {
   const src = board.cards[edge.src]
   const dst = board.cards[edge.dst]
   if (src === undefined || dst === undefined) return ''
   const dimmed = isArchived(src) || isArchived(dst)
     || (src.kind === 'vuln' && src.status === 'revoked')
     || (dst.kind === 'access' && dst.status === 'lost')
-  if (dimmed) return 'edgeDim'
-  return edge.type === 'derive' ? 'edgeFlow' : 'edgeFlowSlow'
+  if (dimmed) return 'dim'
+  return edge.type === 'derive' ? 'derive' : 'pivot'
 }
 
 /** The bee currently working a card, when one is running. */

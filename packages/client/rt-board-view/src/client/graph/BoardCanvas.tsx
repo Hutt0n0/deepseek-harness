@@ -43,7 +43,7 @@ export const ZOOM_STEPS: readonly number[] = [0.5, 0.65, 0.8, 1, 1.25, 1.5, 2]
 /** Board filter facet: kind-derived columns plus the running lane. */
 export type BoardFilter = 'all' | 'idea' | 'vuln' | 'access' | 'running'
 
-type BoardStatusKey = 'board.statusOpen' | 'board.statusVerifying' | 'board.statusValidated'
+type BoardStatusKey = 'board.statusOpen' | 'board.statusSuggested' | 'board.statusVerifying' | 'board.statusValidated'
   | 'board.statusFalsified' | 'board.statusArchived' | 'board.statusVerified' | 'board.statusRevoked'
   | 'board.statusSuperseded' | 'board.statusHeld' | 'board.statusLost' | 'board.statusDisproved'
 
@@ -138,6 +138,44 @@ function CardDetail({
           <span>{surfaceText}</span>
         </div>
         <h3 className={css.detailTitle}>{card.title}</h3>
+        {card.status === 'suggested' && (
+          <section className={css.detailSection} data-rt-suggestion="">
+            <h4 className={css.detailHeading}>{t('detailSuggestionHeading')}</h4>
+            {card.ext.suggestedBy !== undefined && (
+              <dl className={css.detailGrid}>
+                <dt>{t('detailSuggestedBy')}</dt>
+                <dd><code className={css.detailPath}>{card.ext.suggestedBy}</code></dd>
+                {card.ext.suggestionRationale !== undefined && (
+                  <><dt>{t('detailSuggestionRationale')}</dt><dd>{card.ext.suggestionRationale}</dd></>
+                )}
+              </dl>
+            )}
+            <div className={css.dispatchRow}>
+              <button
+                type="button"
+                className={css.dispatchPrimary}
+                onClick={() => {
+                  actions.draftToCommander(
+                    `board_transition ${card.shortId} → open（采纳蜂建议），随后派蜂验证：${card.title}`,
+                  )
+                }}
+              >
+                {t('detailAdopt')}
+              </button>
+              <button
+                type="button"
+                className={css.actionBtn}
+                onClick={() => {
+                  actions.draftToCommander(
+                    `board_transition ${card.shortId} → archived（驳回蜂建议）`,
+                  )
+                }}
+              >
+                {t('detailArchive')}
+              </button>
+            </div>
+          </section>
+        )}
         {card.detail !== '' && <MarkdownText text={card.detail} labels={labels} variant="compact" />}
         <dl className={css.detailGrid}>
           {card.ext.hypothesis !== undefined && (<><dt>{t('detailHypothesis')}</dt><dd>{card.ext.hypothesis}</dd></>)}
@@ -349,11 +387,14 @@ export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
             const anchors = edgeAnchors(srcBox, dstBox)
             const path = edgePath(anchors.from, anchors.to)
             const base = edge.type === 'derive' ? css.edgeDerive : css.edgeBase
-            const flow = edgeFlowClass(edge, board)
+            const flowKey = edgeFlowClass(edge, board)
+            const flowClass = flowKey === 'dim' ? css.edgeDim
+              : flowKey === 'pivot' ? css.edgeFlowSlow
+                : flowKey === 'derive' ? css.edgeFlow : ''
             return (
               <g key={edge.id}>
                 <path className={`${css.edgeBase} ${base}`} d={path} />
-                {flow !== '' && <path className={`${css.edgeFlow} ${flow}`} d={path} />}
+                {flowClass !== '' && <path className={`${css.edgeFlow} ${flowClass}`} d={path} />}
               </g>
             )
           })}

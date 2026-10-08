@@ -121,7 +121,9 @@ export function apply(
       'Assign skills to one bee kind. The assigned skills are injected into NEWLY created bees of '
       + 'that kind as <assigned_skill> doctrine sections (running bees are unaffected). Kind must '
       + 'exist in the current fleet; a skill that is statically blocked or runtime-disabled is '
-      + 'rejected. Assign when the battlefield needs a specific playbook on a bee — e.g. hand '
+      + 'rejected. A stale kind (one skill_assignment_view lists under staleKinds — removed from the '
+      + 'fleet) may only be CLEARED: pass its name with skills=[] to delete the dead assignment key. '
+      + 'Assign when the battlefield needs a specific playbook on a bee — e.g. hand '
       + 'kerberoast-playbook to the pivot kind before domain work.',
     parameters: {
       kind: { type: 'string', required: true, description: 'Bee kind from the fleet (see skill_assignment_view)' },
@@ -135,10 +137,24 @@ export function apply(
       exec.signal.throwIfAborted()
       agentOf(exec)
       const kinds = shared.fleetKinds()
-      if (!kinds.includes(args.kind)) {
+      const isStale = !kinds.includes(args.kind)
+      // Stale kinds (removed from the fleet) may ONLY be cleared — this is
+      // the one sanctioned deletion channel for legacy beeSkills keys, which
+      // otherwise survive every spread-merge forever. Assigning skills to a
+      // stale kind stays rejected.
+      if (isStale && args.skills.length > 0) {
         return Promise.resolve({ ok: false, error: `unknown bee kind "${args.kind}" — fleet kinds: ${kinds.join(', ') || '(fleet empty)'}` })
       }
       return (async (): Promise<JsonRecord> => {
+        if (isStale) {
+          const current = shared.settings.get().beeSkills ?? {}
+          const next: Record<string, readonly string[]> = {}
+          for (const [key, value] of Object.entries(current)) {
+            if (key !== args.kind && value !== undefined) next[key] = value
+          }
+          await shared.settings.replace({ beeSkills: next })
+          return { ok: true, kind: args.kind, cleared: true, remainingKinds: Object.keys(next).sort() }
+        }
         const available = await shared.listableSkills(scopeOf(agentOf(exec).ctx))
         const byName = new Map(available.map(skill => [skill.name, skill]))
         const unknown = args.skills.filter(name => !byName.has(name))

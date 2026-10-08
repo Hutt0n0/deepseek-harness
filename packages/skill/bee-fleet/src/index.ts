@@ -35,6 +35,23 @@ export interface Config {
 const FLEET_DIR = 'fleet'
 const FLEET_FILE = 'fleet.yaml'
 
+/** Structural validation for one bee loaded from YAML — the same rules as
+ * the HTTP wire path (slug regex, cross-fleet dedup), so a hand-edited
+ * fleet.yaml cannot mount a fleet the management API would reject. */
+function validateFleet(bees: readonly BeeSpec[]): readonly BeeSpec[] {
+  const toolNames = new Set<string>()
+  const kinds = new Set<string>()
+  for (const [index, bee] of bees.entries()) {
+    if (!/^[a-z][a-z0-9_]*$/i.test(bee.toolName)) throw new Error(`fleet.yaml: bee[${index}].toolName "${bee.toolName}" is not a valid tool name`)
+    if (!/^[a-z][a-z0-9_]*$/i.test(bee.kind)) throw new Error(`fleet.yaml: bee[${index}].kind "${bee.kind}" is not a valid kind slug`)
+    if (toolNames.has(bee.toolName)) throw new Error(`fleet.yaml: duplicate toolName "${bee.toolName}" (bee[${index}])`)
+    toolNames.add(bee.toolName)
+    if (kinds.has(bee.kind)) throw new Error(`fleet.yaml: duplicate kind "${bee.kind}" (bee[${index}])`)
+    kinds.add(bee.kind)
+  }
+  return bees
+}
+
 /** Structural validation for one bee loaded from YAML. */
 function beeFromConfig(value: unknown, index: number): BeeSpec {
   if (typeof value !== 'object' || value === null) throw new Error(`fleet.yaml: bee[${index}] must be a mapping`)
@@ -53,7 +70,9 @@ function beeFromConfig(value: unknown, index: number): BeeSpec {
   return { toolName, kind, persona, toolFilter: raw.toolFilter as readonly string[], backgroundMode }
 }
 
-/** Read and validate the fleet file; a missing file means an empty fleet. */
+/** Read and validate the fleet file; a missing file means an empty fleet.
+ * A PRESENT but broken file throws (fail-loud at mount — the same contract
+ * as the management API), never a silently empty fleet. */
 function readFleet(file: string): readonly BeeSpec[] {
   let content: string
   try {
@@ -64,7 +83,7 @@ function readFleet(file: string): readonly BeeSpec[] {
   }
   const parsed = parse(content) as { bees?: unknown }
   if (!Array.isArray(parsed.bees)) return []
-  return (parsed.bees as unknown[]).map(beeFromConfig)
+  return validateFleet((parsed.bees as unknown[]).map(beeFromConfig))
 }
 
 /** Render the fleet file (yaml lib: literal blocks and flow arrays come out stable). */
@@ -106,7 +125,12 @@ export function apply(ctx: Context, config: Config): void {
           toolName: bee.toolName,
           backgroundMode: bee.backgroundMode,
           enableRunInBackground: true,
-          persona: bee.persona,
+          // The kind stamp rides INSIDE the persona: skill-control resolves
+          // the bee's kind from its durable persona text, so an operator
+          // editing the fleet persona later must not break kind resolution
+          // for cold-resumed bees (the persona-equality channel alone dies
+          // on the first edit). The stamp is a stable machine line.
+          persona: `${bee.persona}\n\n<!-- rt-bee-kind:${bee.kind} -->`,
           toolFilter: { allow: [...bee.toolFilter] },
           maxDepth: 1,
         })
@@ -141,6 +165,10 @@ export function apply(ctx: Context, config: Config): void {
   const BEE_TOOL_UNIVERSE: readonly string[] = [
     'bash', 'read', 'write', 'edit', 'glob', 'grep', 'todo_write',
     'web_fetch', 'web_search', 'skill', 'job_output', 'job_kill', 'job_list',
+    // Reporting/cooperation channels — omitting these here is exactly how the
+    // first engagement lost its send_message report path (persona ordered
+    // "report via send_message" while the UI could not grant the tool).
+    'send_message', 'board_suggest', 'interrupt_agent', 'list_agents',
   ]
   const knownTools = (): readonly string[] => BEE_TOOL_UNIVERSE
 

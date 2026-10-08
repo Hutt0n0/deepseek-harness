@@ -14,6 +14,7 @@ export const zh = {
   'board.statusOpen': '待派工',
   'board.statusVerifying': '验证中',
   'board.statusValidated': '已转化',
+  'board.statusSuggested': '待裁决',
   'board.statusFalsified': '已证伪',
   'board.statusArchived': '已归档',
   'board.statusVerified': '已验证',
@@ -56,6 +57,11 @@ export const zh = {
   'detailEvidence': '证据',
   'detailTasks': '派工记录',
   'detailChain': '上游链路',
+  'detailSuggestionHeading': '蜂建议 — 待裁决',
+  'detailSuggestedBy': '提议蜂',
+  'detailSuggestionRationale': '建议理由',
+  'detailAdopt': '采纳（预填指令）',
+  'detailArchive': '驳回（预填指令）',
 } as const
 
 export type BoardKey = keyof typeof zh
@@ -72,6 +78,7 @@ export const en: Record<BoardKey, string> = {
   'board.statusOpen': 'Open',
   'board.statusVerifying': 'Verifying',
   'board.statusValidated': 'Materialized',
+  'board.statusSuggested': 'Suggested',
   'board.statusFalsified': 'Falsified',
   'board.statusArchived': 'Archived',
   'board.statusVerified': 'Verified',
@@ -114,4 +121,9 @@ export const en: Record<BoardKey, string> = {
   'detailEvidence': 'Evidence',
   'detailTasks': 'Dispatches',
   'detailChain': 'Upstream chain',
+  'detailSuggestionHeading': 'Bee suggestion — awaiting adjudication',
+  'detailSuggestedBy': 'Proposed by',
+  'detailSuggestionRationale': 'Rationale',
+  'detailAdopt': 'Adopt (prefill command)',
+  'detailArchive': 'Archive (prefill command)',
 }

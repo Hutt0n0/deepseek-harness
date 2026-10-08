@@ -230,6 +230,13 @@ export function apply(ctx: Context): void {
             card: cardSummary(card),
           })
         }
+        if (card.status === 'suggested') {
+          return Promise.resolve({
+            ok: false,
+            error: `card "${card.shortId}" is a SUGGESTION awaiting your adjudication — transition it to open first (board_transition to:"open"), then dispatch.`,
+            card: cardSummary(card),
+          })
+        }
         const result = writer.recordTask(args.cardId, {
           beeKind: args.beeKind,
           beeSessionId: args.beeSessionId,
@@ -268,6 +275,13 @@ export function apply(ctx: Context): void {
         const writer = writerFor(exec)
         const source = writer.board()?.cards[args.ideaId]
         if (source === undefined) return Promise.resolve({ ok: false, error: `unknown idea "${args.ideaId}"` })
+        if (source.status === 'falsified' || source.status === 'archived' || source.status === 'suggested') {
+          return Promise.resolve({
+            ok: false,
+            error: `idea "${source.shortId}" is ${source.status} — only an open/verifying idea can be promoted to a vuln.`,
+            card: cardSummary(source),
+          })
+        }
         if (source.evidence.length === 0) {
           return Promise.resolve({
             ok: false,
@@ -376,8 +390,8 @@ export function apply(ctx: Context): void {
       + 'access → lost/disproved. Falsified ideas keep their record (report needs them) — not deleted.',
     parameters: {
       cardId: { type: 'string', required: true },
-      to: { type: 'string', required: true, enum: ['open', 'verifying', 'falsified', 'archived', 'revoked', 'lost', 'disproved'] },
-      reason: { type: 'string', description: 'Why (required for falsified/revoked/lost/disproved)' },
+      to: { type: 'string', required: true, enum: ['open', 'verifying', 'validated', 'falsified', 'archived', 'verified', 'revoked', 'superseded', 'held', 'lost', 'disproved'] },
+      reason: { type: 'string', description: 'Why (required for falsified/revoked/lost/disproved; persisted on the card for every transition that carries it)' },
       evidence: { type: 'array', items: evidenceSchema, description: 'Supporting evidence, appended before the transition' },
     },
     output: {

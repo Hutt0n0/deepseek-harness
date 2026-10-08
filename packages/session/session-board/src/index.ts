@@ -332,15 +332,19 @@ export class BoardWriter {
     if (!legalStatuses[card.kind].includes(to)) throw new BoardOpInvalidError(`board: illegal status "${to}" for a ${card.kind} card`)
     if (card.status === 'validated' || card.status === 'superseded' || card.status === 'disproved') throw new BoardOpInvalidError(`board: card "${card.shortId}" is sealed at "${card.status}"`)
     const evidenceAppend = patch?.evidenceAppend ?? []
+    // The reason persists for EVERY transition that carries one — a
+    // revoked/lost/disproved card without its "why" breaks the audit chain
+    // (the old code stored it only for falsified).
+    const ext = patch?.refutation !== void 0 && patch.refutation.trim() !== '' ? {
+      ...card.ext,
+      refutation: patch.refutation,
+    } : card.ext
     const updated = {
       ...card,
       status: to,
       ...patch?.detail !== void 0 ? { detail: patch.detail.slice(0, 2e3) } : {},
       evidence: evidenceAppend.length > 0 ? [...card.evidence, ...evidenceAppend] : card.evidence,
-      ext: to === 'falsified' && patch?.refutation !== void 0 ? {
-        ...card.ext,
-        refutation: patch.refutation,
-      } : card.ext,
+      ext,
     }
     this.append({
       op: 'card.put',
