@@ -17,6 +17,15 @@ interface BeeDraft {
   readonly persona: string
   readonly toolFilter: readonly string[]
   readonly backgroundMode: 'continuable' | 'one-shot'
+  /** Sub-bee authorization — carried through verbatim so saving the fleet
+   * from the management page never strips a subbee configured elsewhere
+   * (full subbee editing lands with the management-page subbee editor). */
+  readonly maxSubbees?: number
+  readonly subbee?: {
+    readonly toolName: string
+    readonly persona: string
+    readonly toolFilter: readonly string[]
+  }
 }
 
 const NAME_PATTERN = /^[a-z][a-z0-9_]*$/i
@@ -177,6 +186,8 @@ export function FleetView({
     persona: bee.persona,
     toolFilter: bee.toolFilter,
     backgroundMode: bee.backgroundMode,
+    ...(bee.maxSubbees !== undefined ? { maxSubbees: bee.maxSubbees } : {}),
+    ...(bee.subbee !== undefined ? { subbee: bee.subbee } : {}),
   })), [bees])
 
   const change = (index: number, next: BeeDraft): void => {

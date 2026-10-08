@@ -5,6 +5,13 @@ export interface BeeEntry {
   readonly persona: string
   readonly toolFilter: readonly string[]
   readonly backgroundMode: 'continuable' | 'one-shot'
+  /** Sub-bee authorization (absent = bee cannot dispatch subbees). */
+  readonly maxSubbees?: number
+  readonly subbee?: {
+    readonly toolName: string
+    readonly persona: string
+    readonly toolFilter: readonly string[]
+  }
 }
 
 /** Wire shape of /rt-fleet/list. */

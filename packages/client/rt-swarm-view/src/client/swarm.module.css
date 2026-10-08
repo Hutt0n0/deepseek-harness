@@ -202,6 +202,72 @@
   font: var(--dsw-font-xs-13) var(--dsw-font-family);
 }
 
+
+/* ── Subbee rows (nested under their parent bee — ownership-first layout) ── */
+
+.cardGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.subbeeList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 2px solid var(--dsw-alias-border-l2);
+}
+
+.subbeeRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  font: var(--dsw-font-xs-13) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.subbeeRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.subbeeRow .dot {
+  width: 6px;
+  height: 6px;
+}
+
+.subbeeLabel {
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subbeeTag {
+  flex-shrink: 0;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 14px;
+}
+
+.subbeeRow .meta {
+  margin-left: auto;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card,
   .filterPill,

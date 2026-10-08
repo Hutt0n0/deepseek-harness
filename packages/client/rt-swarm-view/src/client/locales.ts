@@ -26,6 +26,7 @@ export const zh = {
   'swarm.kindWeb': 'Web打点',
   'swarm.kindPivot': '内网横向',
   'swarm.kindOther': '工蜂',
+  'swarm.subbeeTag': '子蜂',
 } as const
 
 export type SwarmKey = keyof typeof zh
@@ -54,4 +55,5 @@ export const en: Record<SwarmKey, string> = {
   'swarm.kindWeb': 'Web Exploit',
   'swarm.kindPivot': 'Lateral',
   'swarm.kindOther': 'Bee',
+  'swarm.subbeeTag': 'Sub-bee',
 }

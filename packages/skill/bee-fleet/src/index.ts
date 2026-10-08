@@ -36,8 +36,9 @@ const FLEET_DIR = 'fleet'
 const FLEET_FILE = 'fleet.yaml'
 
 /** Structural validation for one bee loaded from YAML — the same rules as
- * the HTTP wire path (slug regex, cross-fleet dedup), so a hand-edited
- * fleet.yaml cannot mount a fleet the management API would reject. */
+ * the HTTP wire path (slug regex, cross-fleet dedup, subbee containment), so
+ * a hand-edited fleet.yaml cannot mount a fleet the management API would
+ * reject. */
 function validateFleet(bees: readonly BeeSpec[]): readonly BeeSpec[] {
   const toolNames = new Set<string>()
   const kinds = new Set<string>()
@@ -48,6 +49,13 @@ function validateFleet(bees: readonly BeeSpec[]): readonly BeeSpec[] {
     toolNames.add(bee.toolName)
     if (kinds.has(bee.kind)) throw new Error(`fleet.yaml: duplicate kind "${bee.kind}" (bee[${index}])`)
     kinds.add(bee.kind)
+    if (bee.subbee !== undefined) {
+      if (toolNames.has(bee.subbee.toolName)) throw new Error(`fleet.yaml: bee[${index}].subbee.toolName "${bee.subbee.toolName}" collides with a mounted tool`)
+      toolNames.add(bee.subbee.toolName)
+      const outside = bee.subbee.toolFilter.filter(name => !bee.toolFilter.includes(name))
+      if (outside.length > 0) throw new Error(`fleet.yaml: bee[${index}].subbee names tools outside the bee's toolbox: ${outside.join(', ')}`)
+      if ((bee.maxSubbees ?? 0) <= 0) throw new Error(`fleet.yaml: bee[${index}] carries a subbee but maxSubbees is absent/zero`)
+    }
   }
   return bees
 }
@@ -67,7 +75,34 @@ function beeFromConfig(value: unknown, index: number): BeeSpec {
     throw new Error(`fleet.yaml: bee[${index}].toolFilter must be a non-empty string array`)
   }
   const backgroundMode = raw.backgroundMode === 'one-shot' ? 'one-shot' : 'continuable'
-  return { toolName, kind, persona, toolFilter: raw.toolFilter as readonly string[], backgroundMode }
+  // Subbee fields: maxSubbees must be a non-negative integer; the subbee
+  // mapping needs toolName/persona/toolFilter like any bee.
+  let maxSubbees: number | undefined
+  if (raw.maxSubbees !== undefined) {
+    if (typeof raw.maxSubbees !== 'number' || !Number.isInteger(raw.maxSubbees) || raw.maxSubbees < 0) {
+      throw new Error(`fleet.yaml: bee[${index}].maxSubbees must be a non-negative integer`)
+    }
+    maxSubbees = raw.maxSubbees
+  }
+  let subbee: BeeSpec['subbee']
+  if (raw.subbee !== undefined) {
+    if (typeof raw.subbee !== 'object' || raw.subbee === null) throw new Error(`fleet.yaml: bee[${index}].subbee must be a mapping`)
+    const sb = raw.subbee as Record<string, unknown>
+    const sbTool = typeof sb.toolName === 'string' ? sb.toolName.trim() : ''
+    const sbPersona = typeof sb.persona === 'string' ? sb.persona : ''
+    if (sbTool === '') throw new Error(`fleet.yaml: bee[${index}].subbee.toolName is required`)
+    if (sbPersona.trim() === '') throw new Error(`fleet.yaml: bee[${index}].subbee.persona must not be empty`)
+    if (!Array.isArray(sb.toolFilter) || sb.toolFilter.length === 0
+      || sb.toolFilter.some(name => typeof name !== 'string')) {
+      throw new Error(`fleet.yaml: bee[${index}].subbee.toolFilter must be a non-empty string array`)
+    }
+    subbee = { toolName: sbTool, persona: sbPersona, toolFilter: sb.toolFilter as readonly string[] }
+  }
+  return {
+    toolName, kind, persona, toolFilter: raw.toolFilter as readonly string[], backgroundMode,
+    ...(maxSubbees !== undefined ? { maxSubbees } : {}),
+    ...(subbee !== undefined ? { subbee } : {}),
+  }
 }
 
 /** Read and validate the fleet file; a missing file means an empty fleet.
@@ -114,8 +149,22 @@ export function apply(ctx: Context, config: Config): void {
   let current: readonly BeeSpec[] = []
   const mounted = new Map<string, { dispose: () => unknown }>()
 
-  /** Mount one bee as a child tool-subagent fiber; returns its disposer. */
+  /** Mount one bee as a child tool-subagent fiber; returns its disposer.
+   * When the bee carries a subbee spec, a SECOND delegation tool is mounted
+   * in the same fiber: maxDepth 2 lets the bee dispatch depth-2 subbees
+   * while the subbee itself cannot recurse (its own depth-2 dispatch would
+   * need depth 3 > cap). The subbee toolbox must be a subset of the bee's —
+   * domain containment is physical, not just prose. */
   const mountBee = (bee: BeeSpec): { dispose: () => unknown } => {
+    if (bee.subbee !== undefined && (bee.maxSubbees ?? 0) > 0) {
+      const outside = bee.subbee.toolFilter.filter(name => !bee.toolFilter.includes(name))
+      if (outside.length > 0) {
+        throw new Error(`bee-fleet: subbee of "${bee.toolName}" names tools outside the bee's own toolbox: ${outside.join(', ')} — domain containment is violated`)
+      }
+      if (bee.subbee.toolName === bee.toolName) {
+        throw new Error(`bee-fleet: subbee toolName "${bee.subbee.toolName}" collides with its parent bee`)
+      }
+    }
     const child = ctx.plugin({
       name: `rt-bee-fleet:${bee.toolName}`,
       inject: ToolSubagent.inject,
@@ -131,9 +180,32 @@ export function apply(ctx: Context, config: Config): void {
           // for cold-resumed bees (the persona-equality channel alone dies
           // on the first edit). The stamp is a stable machine line.
           persona: `${bee.persona}\n\n<!-- rt-bee-kind:${bee.kind} -->`,
-          toolFilter: { allow: [...bee.toolFilter] },
+          // The parent's allow-list must include its own subbee tool — the
+          // subbee delegation tool registers in the bee's scope, and the
+          // bee's tools.restrict(allow) would otherwise hide exactly the
+          // tool that authorizes its third tier (this was the RT-7 E2E
+          // failure: subbee mounted, bee blinded to it).
+          toolFilter: {
+            allow: bee.subbee !== undefined && (bee.maxSubbees ?? 0) > 0
+              ? [...bee.toolFilter, bee.subbee.toolName]
+              : [...bee.toolFilter],
+          },
           maxDepth: 1,
         })
+        if (bee.subbee !== undefined && (bee.maxSubbees ?? 0) > 0) {
+          ToolSubagent.apply(childCtx, {
+            provider: 'spawn',
+            toolName: bee.subbee.toolName,
+            backgroundMode: bee.backgroundMode,
+            enableRunInBackground: true,
+            persona: `${bee.subbee.persona}\n\n<!-- rt-bee-kind:${bee.kind} rt-subbee-of:${bee.toolName} max:${bee.maxSubbees ?? 0} -->`,
+            toolFilter: { allow: [...bee.subbee.toolFilter] },
+            // Depth 2: the BEE dispatches at depth 1 (children depth ≤ 1),
+            // the subbee dispatches at depth 2 (children depth ≤ 2, i.e. its
+            // own depth-2 children would be depth 3 — rejected). Hard cap.
+            maxDepth: 2,
+          })
+        }
       },
     })
     return { dispose: () => child.dispose() }
@@ -196,8 +268,19 @@ export function apply(ctx: Context, config: Config): void {
 /** Structural equality for reconcile diffing. */
 function sameBee(a: BeeSpec | undefined, b: BeeSpec): boolean {
   if (a === undefined) return false
+  const sa = a.subbee
+  const sb = b.subbee
+  const subbeeEqual = (a.maxSubbees ?? 0) === (b.maxSubbees ?? 0) && (
+    sa === undefined && sb === undefined
+    || (sa !== undefined && sb !== undefined
+      && sa.toolName === sb.toolName
+      && sa.persona === sb.persona
+      && sa.toolFilter.length === sb.toolFilter.length
+      && sa.toolFilter.every((name, index) => name === sb.toolFilter[index]))
+  )
   return a.toolName === b.toolName && a.kind === b.kind && a.persona === b.persona
     && a.backgroundMode === b.backgroundMode
     && a.toolFilter.length === b.toolFilter.length
     && a.toolFilter.every((name, index) => name === b.toolFilter[index])
+    && subbeeEqual
 }

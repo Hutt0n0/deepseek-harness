@@ -85,7 +85,32 @@ function beeFromWire(value: unknown, index: number): BeeSpec {
   const toolFilter = raw.toolFilter as string[]
   if (toolFilter.length === 0) throw new Error(`bee[${index}].toolFilter must not be empty`)
   const backgroundMode = raw.backgroundMode === 'one-shot' ? 'one-shot' : 'continuable'
-  return { toolName, kind, persona, toolFilter, backgroundMode }
+  let maxSubbees: number | undefined
+  if (raw.maxSubbees !== undefined) {
+    if (typeof raw.maxSubbees !== 'number' || !Number.isInteger(raw.maxSubbees) || raw.maxSubbees < 0) {
+      throw new Error(`bee[${index}].maxSubbees must be a non-negative integer`)
+    }
+    maxSubbees = raw.maxSubbees
+  }
+  let subbee: { toolName: string; persona: string; toolFilter: readonly string[] } | undefined
+  if (raw.subbee !== undefined) {
+    if (typeof raw.subbee !== 'object' || raw.subbee === null) throw new Error(`bee[${index}].subbee must be an object`)
+    const sb = raw.subbee as Record<string, unknown>
+    const sbTool = typeof sb.toolName === 'string' ? sb.toolName.trim() : ''
+    const sbPersona = typeof sb.persona === 'string' ? sb.persona : ''
+    if (sbTool === '') throw new Error(`bee[${index}].subbee.toolName is required`)
+    if (sbPersona.trim() === '') throw new Error(`bee[${index}].subbee.persona must not be empty`)
+    if (!Array.isArray(sb.toolFilter) || sb.toolFilter.length === 0
+      || sb.toolFilter.some(name => typeof name !== 'string')) {
+      throw new Error(`bee[${index}].subbee.toolFilter must be a non-empty string array`)
+    }
+    subbee = { toolName: sbTool, persona: sbPersona, toolFilter: sb.toolFilter as readonly string[] }
+  }
+  return {
+    toolName, kind, persona, toolFilter, backgroundMode,
+    ...(maxSubbees !== undefined ? { maxSubbees } : {}),
+    ...(subbee !== undefined ? { subbee } : {}),
+  }
 }
 
 /** Route handler dependencies. */

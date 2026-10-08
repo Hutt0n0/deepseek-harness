@@ -20,6 +20,19 @@ export interface BeeSpec {
   readonly toolFilter: BeeToolFilter
   /** Continuation mode; the fleet fixes `continuable` (persistent bee sessions). */
   readonly backgroundMode: 'continuable' | 'one-shot'
+  /**
+   * Sub-bee authorization: when present, the bee may dispatch up to
+   * `maxSubbees` depth-2 workers from this spec (its own domain's tactical
+   * divide-and-conquer). The subbee shares the bee's kind channel; its
+   * toolbox must be a subset of the bee's own (enforced at mount).
+   * Absent = the bee physically cannot dispatch (no delegation tool).
+   */
+  readonly maxSubbees?: number
+  readonly subbee?: {
+    readonly toolName: string
+    readonly persona: string
+    readonly toolFilter: BeeToolFilter
+  }
 }
 
 /** Management-face view of one bee (persona included; routes serve it raw). */

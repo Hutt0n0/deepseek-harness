@@ -14,6 +14,8 @@ interface SwarmCard {
   readonly label: string
   readonly running: boolean
   readonly timing: SessionProjectionMap['subagentTiming'] | undefined
+  /** Depth-2 children (subbees) nested under this bee. */
+  readonly subbees: readonly SwarmCard[]
 }
 
 /** Swarm filter facet: liveness lanes. */
@@ -40,10 +42,13 @@ function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h${minutes % 60 > 0 ? ` ${minutes % 60}m` : ''}`
 }
 
-/** Cards in catalog order; one row per healthy catalog entry. */
+/** Cards in catalog order; one row per healthy catalog entry. Subbees
+ * (depth-2 children of a bee) attach to their parent card — the swarm view
+ * shows ownership, not a flat wall. */
 function deriveCards(
   catalog: SessionListState['subagentsByParent'][SessionId] | undefined,
   byId: SessionListState['byId'],
+  allCatalogs: SessionListState['subagentsByParent'],
 ): SwarmCard[] {
   const entries = catalog?.entries ?? []
   const cards: SwarmCard[] = []
@@ -52,12 +57,28 @@ function deriveCards(
     const summary = byId[entry.id]
     const projections = summary?.projectionValues
     const identity = projections?.subagent
+    // Subbees: this bee's own catalog, same shape as the commander's.
+    const subbees: SwarmCard[] = []
+    for (const subEntry of allCatalogs[entry.id]?.entries ?? []) {
+      if (subEntry.kind !== 'child') continue
+      const subSummary = byId[subEntry.id]
+      const subIdentity = subSummary?.projectionValues?.subagent
+      subbees.push({
+        childId: subEntry.id,
+        mode: subEntry.mode,
+        label: ('label' in subEntry && subEntry.label) || subIdentity?.label || subEntry.id.slice(0, 8),
+        running: subSummary?.running === true,
+        timing: subSummary?.projectionValues?.subagentTiming,
+        subbees: [],
+      })
+    }
     cards.push({
       childId: entry.id,
       mode: entry.mode,
       label: ('label' in entry && entry.label) || identity?.label || entry.id.slice(0, 8),
       running: summary?.running === true,
       timing: projections?.subagentTiming,
+      subbees,
     })
   }
   return cards
@@ -81,7 +102,8 @@ export function SwarmView({
     watch(true)
     return () => { watch(false) }
   }, [watch, sessionId])
-  const cards = useMemo(() => deriveCards(catalog, byId), [catalog, byId])
+  const allCatalogs = useSessions(state => state.subagentsByParent)
+  const cards = useMemo(() => deriveCards(catalog, byId, allCatalogs), [catalog, byId, allCatalogs])
   const runningCount = cards.filter(card => card.running).length
   const visible = useMemo(() => cards.filter((card) => {
     if (filter === 'all') return true
@@ -135,39 +157,62 @@ export function SwarmView({
         : (
           <div className={css.wall}>
             {visible.map(card => (
-              <button
-                key={card.childId}
-                type="button"
-                className={css.card}
-                onClick={() => { openBee(card.childId, card.mode) }}
-                title={t('swarm.openTranscript')}
-              >
-                <span className={css.cardTop}>
-                  <span className={card.running ? `${css.dot} ${css.dotRunning}` : css.dot} />
-                  <span className={css.label}>{card.label}</span>
-                  <span className={`${css.kindTag} ${kindKey(kindOf(card.label))}`}>{kindLabel(kindOf(card.label))}</span>
-                </span>
-                <span className={css.meta}>
-                  <span className={card.running ? css.runningMeta : undefined}>
-                    {card.running
-                      ? t('swarm.statusRunning')
-                      : card.mode === 'continuable'
-                        ? t('swarm.statusStopped')
-                        : t('swarm.statusDone')}
+              <div key={card.childId} className={css.cardGroup}>
+                <button
+                  type="button"
+                  className={css.card}
+                  onClick={() => { openBee(card.childId, card.mode) }}
+                  title={t('swarm.openTranscript')}
+                >
+                  <span className={css.cardTop}>
+                    <span className={card.running ? `${css.dot} ${css.dotRunning}` : css.dot} />
+                    <span className={css.label}>{card.label}</span>
+                    <span className={`${css.kindTag} ${kindKey(kindOf(card.label))}`}>{kindLabel(kindOf(card.label))}</span>
                   </span>
-                  <span>{card.mode === 'continuable' ? t('swarm.modeContinuable') : t('swarm.modeOneShot')}</span>
-                  {card.timing !== undefined && (
-                    <span>
-                      {t('swarm.duration', {
-                        duration: formatDuration(card.timing.settledMs
-                          + (card.timing.active !== undefined
-                            ? Math.max(0, card.timing.active.through - card.timing.active.since)
-                            : 0)),
-                      })}
+                  <span className={css.meta}>
+                    <span className={card.running ? css.runningMeta : undefined}>
+                      {card.running
+                        ? t('swarm.statusRunning')
+                        : card.mode === 'continuable'
+                          ? t('swarm.statusStopped')
+                          : t('swarm.statusDone')}
                     </span>
-                  )}
-                </span>
-              </button>
+                    <span>{card.mode === 'continuable' ? t('swarm.modeContinuable') : t('swarm.modeOneShot')}</span>
+                    {card.timing !== undefined && (
+                      <span>
+                        {t('swarm.duration', {
+                          duration: formatDuration(card.timing.settledMs
+                            + (card.timing.active !== undefined
+                              ? Math.max(0, card.timing.active.through - card.timing.active.since)
+                              : 0)),
+                        })}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                {card.subbees.length > 0 && (
+                  <div className={css.subbeeList} data-rt-swarm-subbees="">
+                    {card.subbees.map(sub => (
+                      <button
+                        key={sub.childId}
+                        type="button"
+                        className={css.subbeeRow}
+                        onClick={() => { openBee(sub.childId, sub.mode) }}
+                        title={t('swarm.openTranscript')}
+                      >
+                        <span className={sub.running ? `${css.dot} ${css.dotRunning}` : css.dot} />
+                        <span className={css.subbeeLabel}>{sub.label}</span>
+                        <span className={css.subbeeTag}>{t('swarm.subbeeTag')}</span>
+                        <span className={css.meta}>
+                          <span className={sub.running ? css.runningMeta : undefined}>
+                            {sub.running ? t('swarm.statusRunning') : t('swarm.statusDone')}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
