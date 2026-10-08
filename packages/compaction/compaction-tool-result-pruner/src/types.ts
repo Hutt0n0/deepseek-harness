@@ -9,6 +9,12 @@ export interface ToolResultPruneConfig {
   headChars?: number
   /** Maximum trailing Unicode code points retained. Defaults to `1024`. */
   tailChars?: number
+  /**
+   * Repeated-poll collapse: collapse all but the newest result of a tool
+   * command repeated at least this many consecutive times (same canonical
+   * command). `0` disables the channel. Defaults to `3`.
+   */
+  collapseRepeats?: number
 }
 
 /** Validated, detached, deeply immutable pruning configuration. */
@@ -16,6 +22,7 @@ export interface ResolvedConfig {
   readonly thresholdChars: number
   readonly headChars: number
   readonly tailChars: number
+  readonly collapseRepeats: number
 }
 
 /** Cited source event and size accounting for one landed surface replacement. */

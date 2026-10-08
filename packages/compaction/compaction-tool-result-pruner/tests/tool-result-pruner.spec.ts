@@ -102,9 +102,9 @@ describe('tool-result pruning configuration', () => {
     const raw = { thresholdChars: 100, headChars: 20, tailChars: 10 }
     const resolved = resolveConfig(raw)
     raw.headChars = 1
-    expect(resolved).toEqual({ thresholdChars: 100, headChars: 20, tailChars: 10 })
+    expect(resolved).toEqual({ thresholdChars: 100, headChars: 20, tailChars: 10, collapseRepeats: 3 })
     expect(Object.isFrozen(resolved)).toBe(true)
-    expect(DEFAULTS).toEqual({ thresholdChars: 8192, headChars: 4096, tailChars: 1024 })
+    expect(DEFAULTS).toEqual({ thresholdChars: 8192, headChars: 4096, tailChars: 1024, collapseRepeats: 3 })
     expect(Object.isFrozen(DEFAULTS)).toBe(true)
   })
 
@@ -296,5 +296,91 @@ describe('ToolResultPruner session transaction', () => {
       turn: 2,
     })
     expect(() => prune.pruneSession(session)).not.toThrow()
+  })
+})
+
+describe('collapseRepeatedResults (repeated-poll collapse)', () => {
+  function appendPoll(session: Session, turn: number, command: string, text: string): void {
+    const callId = ToolCallId(`call-${turn}`)
+    session.append('turn/start', { turn })
+    session.append('step/start', { turn, step: 1 })
+    session.append('assistant/message', {
+      stream: [],
+      turn,
+      step: 1,
+      message: createMessage({
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: callId, name: 'bash', arguments: JSON.stringify({ command }) }],
+        source: { kind: 'model', provider: MODEL, model: MODEL },
+      }),
+    }, { surfaceOp: 'append' })
+    session.append('tool/call', { turn, step: 1, callId, name: 'bash', arguments: JSON.stringify({ command }) })
+    session.append('tool/result', {
+      turn,
+      step: 1,
+      message: createToolResultMessage({ callId, content: [{ type: 'text', text }], isError: false }),
+    }, { surfaceOp: 'append' })
+    session.append('step/end', { turn, step: 1 })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
+  }
+
+  it('collapses all but the newest of a repeated poll family', () => {
+    const pruner = service({ thresholdChars: 1e9, collapseRepeats: 3 })
+    const session = Session.create(SessionId('collapse-test'))
+    appendPoll(session, 1, 'sleep 115; cat recon/nmap_full.gnmap', 'POLL1: 0 hosts open')
+    appendPoll(session, 2, 'sleep 115; cat recon/nmap_full.gnmap', 'POLL2: 1 host open')
+    appendPoll(session, 3, 'sleep 115; cat recon/nmap_full.gnmap', 'POLL3: 2 hosts open')
+    const result = pruner.collapseRepeatedResults(session)
+    expect(result.pruned).toHaveLength(2)
+    // Poll outputs here are one-liners shorter than the marker; the collapse
+    // still pays for itself in production (nmap transcripts are kilobytes).
+    expect(result.charsRemoved).toBeLessThan(0)
+    // The newest result survives verbatim; older ones read as placeholders.
+    const texts = session.deriveMessages()
+      .filter(m => m.role === 'user' && (m.content[0] as unknown as { type: string }).type === 'tool-result')
+      .map((m) => {
+        const block = m.content[0] as unknown as { content?: { type: string; text: string }[] }
+        return block.content?.[0]?.text ?? ''
+      })
+    expect(texts.filter(t => t.startsWith('POLL'))).toEqual(['POLL3: 2 hosts open'])
+    expect(texts.filter(t => t.includes('repeated poll collapsed'))).toHaveLength(2)
+  })
+
+  it('digit differences (sleep durations, PIDs) stay one polling family', () => {
+    const pruner = service({ thresholdChars: 1e9, collapseRepeats: 3 })
+    const session = Session.create(SessionId('collapse-test'))
+    appendPoll(session, 1, 'sleep 90; cat scan.gnmap; pgrep -f nmap | wc -l', 'A')
+    appendPoll(session, 2, 'sleep 115; cat scan.gnmap; pgrep -f nmap | wc -l', 'B')
+    appendPoll(session, 3, 'sleep 240; cat scan.gnmap; pgrep -f nmap | wc -l', 'C')
+    const result = pruner.collapseRepeatedResults(session)
+    expect(result.pruned).toHaveLength(2)
+  })
+
+  it('genuinely different commands never collapse', () => {
+    const pruner = service({ thresholdChars: 1e9, collapseRepeats: 3 })
+    const session = Session.create(SessionId('collapse-test'))
+    appendPoll(session, 1, 'nmap -p- 10.0.0.1', 'scan one')
+    appendPoll(session, 2, 'cat /etc/passwd', 'different command')
+    appendPoll(session, 3, 'curl http://target/', 'another different')
+    const result = pruner.collapseRepeatedResults(session)
+    expect(result.pruned).toHaveLength(0)
+  })
+
+  it('does not collapse below the threshold and respects collapseRepeats=0', () => {
+    const off = service({ thresholdChars: 1e9, collapseRepeats: 0 })
+    const session = Session.create(SessionId('collapse-test'))
+    appendPoll(session, 1, 'sleep; cat f', 'A')
+    appendPoll(session, 2, 'sleep; cat f', 'B')
+    appendPoll(session, 3, 'sleep; cat f', 'C')
+    appendPoll(session, 4, 'sleep; cat f', 'D')
+    expect(off.collapseRepeatedResults(session).pruned).toHaveLength(0)
+
+    const strict = service({ thresholdChars: 1e9, collapseRepeats: 4 })
+    const session2 = Session.create(SessionId('collapse-test'))
+    appendPoll(session2, 1, 'sleep; cat f', 'A')
+    appendPoll(session2, 2, 'sleep; cat f', 'B')
+    appendPoll(session2, 3, 'sleep; cat f', 'C')
+    appendPoll(session2, 4, 'sleep; cat f', 'D')
+    expect(strict.collapseRepeatedResults(session2).pruned).toHaveLength(3)
   })
 })

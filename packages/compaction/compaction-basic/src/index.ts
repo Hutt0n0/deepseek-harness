@@ -147,6 +147,12 @@ export class BasicCompactionEngine extends CompactionEngine {
     ): Promise<PreStepDecision> => {
       if (!signal.aborted) {
         try {
+          // Repeated-poll collapse runs EVERY step, before pressure checks:
+          // its whole point is keeping polling loops from growing the context
+          // in the first place (a 30-round `sleep; cat scan` poll fills the
+          // window long before any pressure threshold fires).
+          const collapse = this.ctx.get('toolResultPruner')
+          if (collapse !== undefined) collapse.collapseRepeatedResults(agent.session)
           const result = await this.compactIfNeeded(agent, 'pressure', signal)
           if (result !== null) logResult(result, 'step pressure')
         } catch (error: unknown) {
