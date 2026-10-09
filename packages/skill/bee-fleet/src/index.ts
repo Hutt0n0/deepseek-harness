@@ -205,6 +205,41 @@ export function apply(ctx: Context, config: Config): void {
             // own depth-2 children would be depth 3 — rejected). Hard cap.
             maxDepth: 2,
           })
+          // maxSubbees enforcement: an executed pre-execute guard counts the
+          // bee's LIVE subbees (agents whose parent is this bee and still in
+          // the registry — settled subbees are disposed) and denies dispatch
+          // beyond the cap. The persona stamp tells the model the limit; this
+          // gate enforces it — the cap was advisory-only before (it lived in
+          // prose and the stamp), acceptable for a two-bee tier but not for
+          // fleet-wide subbee authorization.
+          const subbeeToolName = bee.subbee.toolName
+          const subbeeCap = bee.maxSubbees ?? 0
+          interface GuardExec {
+            readonly name: string
+            readonly agent?: { session: { id: string } }
+          }
+          type GuardNext = () => Promise<unknown>
+          const guardCtx = childCtx as unknown as {
+            on: (event: string, cb: (exec: GuardExec, next: GuardNext) => Promise<unknown>) => void
+          }
+          guardCtx.on('tools/pre-execute', async (exec, next) => {
+            if (exec.name !== subbeeToolName) return next()
+            const beeSessionId = exec.agent?.session.id
+            if (beeSessionId === undefined) return next()
+            const agents = childCtx.get('agents') as unknown as
+              { list: () => readonly { id: string; session: { header: { parentSession?: string } } }[] } | undefined
+            if (agents === undefined) return next()
+            let live = 0
+            for (const candidate of agents.list()) {
+              if (candidate.session.header.parentSession !== beeSessionId) continue
+              live += 1
+            }
+            if (live < subbeeCap) return next()
+            return {
+              kind: 'deny',
+              reason: `sub-bee cap reached: ${live} of ${subbeeCap} subbees still active. Wait for one to settle (its settlement notice wakes you) before dispatching another — or consolidate the work into an existing subbee's brief.`,
+            }
+          })
         }
       },
     })
