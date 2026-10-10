@@ -259,6 +259,9 @@ export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
   const [dispatch, setDispatch] = useState<{ cardId: string; shortId: string; beeId?: string; x: number; y: number } | null>(null)
   const [draft, setDraft] = useState('')
   const [detailId, setDetailId] = useState<string | null>(null)
+  // Archive band: collapsed by default (a peek line of short ids) so a long
+  // engagement's tombstone pile never scrolls under/over the live canvas.
+  const [archiveOpen, setArchiveOpen] = useState(false)
 
   const runningIds = useMemo(() => {
     const ids = new Set<string>()
@@ -505,21 +508,31 @@ export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
         <button type="button" className={css.zoomBtn} title="+" onClick={() => { stepZoom(1) }}>+</button>
         <button type="button" className={css.zoomBtn} title={t('board.zoomFit')} onClick={() => { fitZoom() }}>⤢</button>
       </div>
-      {archived.length > 0 && (
-        <div className={css.archiveBand}>
-          <div className={css.archiveTitle}>{t('board.archive')} · {archived.length}</div>
-          <div className={css.archiveGrid}>
-            {archived.map(card => (
-              <div key={card.id} className={css.archiveCard}>
-                <div className={css.archiveCardTitle}>{card.shortId} {card.title}</div>
-                <div>{t(statusKey(card))}{card.ext.refutation !== undefined ? ` — ${card.ext.refutation.slice(0, 60)}` : ''}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
       {detailCard !== undefined && (
         <CardDetail card={detailCard} board={board} t={t} actions={actions} onClose={() => { setDetailId(null) }} />
+      )}
+      {archived.length > 0 && (
+        <div className={css.archiveBand} data-rt-archive="">
+          <button
+            type="button"
+            className={css.archiveToggle}
+            onClick={() => { setArchiveOpen(prev => !prev) }}
+          >
+            <span className={css.archiveChevron}>{archiveOpen ? '▾' : '▸'}</span>
+            {t('board.archive')} · {archived.length}
+            {!archiveOpen && <span className={css.archivePeek}>{archived.slice(0, 4).map(card => card.shortId).join(' · ')}{archived.length > 4 ? ' …' : ''}</span>}
+          </button>
+          {archiveOpen && (
+            <div className={css.archiveGrid}>
+              {archived.map(card => (
+                <div key={card.id} className={css.archiveCard}>
+                  <div className={css.archiveCardTitle}>{card.shortId} {card.title}</div>
+                  <div>{t(statusKey(card))}{card.ext.refutation !== undefined ? ` — ${card.ext.refutation.slice(0, 60)}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

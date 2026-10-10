@@ -381,14 +381,53 @@
   stroke-width: 1;
 }
 
-/* ── Archive band ───────────────────────────────────────────────────────── */
+/* ── Archive band ─────────────────────────────────────────────────────────
+ * Rendered AFTER the scrollable canvas inside canvasWrap but pinned to the
+ * bottom: the canvas is position:absolute, so a static block here would
+ * scroll/zoom under the cards and overlap them on busy boards. The band is
+ * out-of-flow, always above the card layer, and collapsed by default. */
 
 .archiveBand {
-  margin: 8px 16px 16px;
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 12px;
+  z-index: 25;
   border: 1px dashed var(--dsw-alias-border-l2);
   border-radius: 12px;
-  padding: 10px 12px;
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 55%, transparent);
+  padding: 6px 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-panel);
+}
+
+.archiveToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.archiveToggle:hover {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.archiveChevron {
+  flex-shrink: 0;
+}
+
+.archivePeek {
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .archiveTitle {
@@ -401,6 +440,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  max-height: 168px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding-right: 4px;
 }
 
 .archiveCard {
