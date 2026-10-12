@@ -248,7 +248,10 @@ function CardDetail({
  * the cards); cards keep their drag coordinates in unzoomed board space.
  */
 export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
-  const { main, archived } = useMemo(() => layoutBoard(board), [board])
+  const [heights, setHeights] = useState<Record<string, number>>({})
+  // Height-aware layout: first pass uses the fallback pitch, then measured
+  // DOM heights re-pack each column so cards never overlap.
+  const { main, archived } = useMemo(() => layoutBoard(board, heights), [board, heights])
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({})
   const [boxes, setBoxes] = useState<Record<string, CardBox>>({})
   const [zoom, setZoom] = useState(1)
@@ -286,8 +289,10 @@ export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
   useEffect(() => {
     const measure = (): void => {
       const next: Record<string, CardBox> = {}
+      const measuredHeights: Record<string, number> = {}
       for (const [id, node] of cardRefs.current) {
         next[id] = { x: node.offsetLeft, y: node.offsetTop, width: node.offsetWidth, height: node.offsetHeight }
+        measuredHeights[id] = node.offsetHeight
       }
       setBoxes((prev) => {
         const same = Object.keys(next).length === Object.keys(prev).length
@@ -297,6 +302,14 @@ export function BoardCanvas({ board, t, actions, filter }: BoardCanvasProps) {
               && old.width === box.width && old.height === box.height
           })
         return same ? prev : next
+      })
+      // Feed real heights back into the layout: unmeasured cards sit at the
+      // fallback pitch until this lands, then the column re-packs (one
+      // reflow) so nothing overlaps.
+      setHeights((prev) => {
+        const same = Object.keys(measuredHeights).length === Object.keys(prev).length
+          && Object.entries(measuredHeights).every(([id, h]) => prev[id] === h)
+        return same ? prev : measuredHeights
       })
     }
     measure()

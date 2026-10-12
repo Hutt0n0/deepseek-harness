@@ -3,7 +3,10 @@ import type { BoardCard, BoardEdge, BoardProjection } from '@dsh-redteam/dsh-ses
 
 /** Layout spacing: column pitch and row pitch. Card boxes size to content. */
 export const COLUMN_PITCH_X = 300
+/** Fallback vertical pitch used only before a card's real height is measured. */
 export const ROW_PITCH_Y = 64
+/** Minimum vertical gap between stacked cards in a column. */
+export const ROW_GAP_Y = 28
 export const CARD_MAX_WIDTH = 260
 
 /** One laid-out card with computed position. */
@@ -23,8 +26,14 @@ export function isArchived(card: BoardCard): boolean {
  * Depth of one card along derive edges: ideas at 0, vulns at 1, accesses at
  * 2 (reducer invariants pin derive kinds, so depth == kind). Columns group
  * by depth; rows stack siblings in short-id order.
+ *
+ * Vertical packing is height-aware: when `heights` carries a measured DOM
+ * height for a card, the next card in the column starts below it plus a
+ * gap — a 130px card no longer overlaps the next one the way the old fixed
+ * 64px pitch did. Unmeasured cards fall back to ROW_PITCH_Y until the
+ * ResizeObserver feeds real heights back (one reflow, then stable).
  */
-export function layoutBoard(board: BoardProjection): {
+export function layoutBoard(board: BoardProjection, heights?: Readonly<Record<string, number>>): {
   readonly main: readonly PlacedCard[]
   readonly archived: readonly BoardCard[]
 } {
@@ -42,8 +51,14 @@ export function layoutBoard(board: BoardProjection): {
   const main: PlacedCard[] = []
   byDepth.forEach((column, depth) => {
     const sorted = [...column].sort(shortOrder)
-    sorted.forEach((card, row) => {
-      main.push({ card, x: depth * COLUMN_PITCH_X + 40, y: row * ROW_PITCH_Y + 40 })
+    let cursorY = 40
+    sorted.forEach((card) => {
+      main.push({ card, x: depth * COLUMN_PITCH_X + 40, y: cursorY })
+      const measured = heights?.[card.id]
+      const step = measured !== undefined && measured > 0
+        ? measured + ROW_GAP_Y
+        : ROW_PITCH_Y + ROW_GAP_Y
+      cursorY += step
     })
   })
   return { main, archived: tombstones.sort(shortOrder) }
