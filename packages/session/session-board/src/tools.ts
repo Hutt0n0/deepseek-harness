@@ -453,11 +453,14 @@ export function apply(ctx: Context): void {
     name: 'board_settle_task',
     description:
       'Settle a dispatch recorded on a card once its bee reports: done / stopped / aborted. A settled '
-      + 'idea with no open dispatches returns to open for adjudication. The result reports how many '
-      + 'board-wide dispatches are still outstanding and whether every dispatched bee has now settled: '
-      + 'while outstandingDispatches > 0, record this result, tell the user the interim picture, and END '
-      + 'YOUR TURN — the remaining bees\' settlement notices will wake you. Only allSettled=true authorizes '
-      + 'the consolidated next-step planning.',
+      + 'idea with no open dispatches returns to open for adjudication. Map the settlement notice kind '
+      + 'to the outcome: "finished" → done; "was stopped" → stopped; "ran out of room" / "failed" / '
+      + '"declined" → aborted (and per doctrine, harvest the bee\'s workspace before deciding '
+      + 'continuation). The result reports how many board-wide dispatches are still outstanding and '
+      + 'whether every dispatched bee has now settled: while outstandingDispatches > 0, record this '
+      + 'result, tell the user the interim picture, and END YOUR TURN — the remaining bees\' '
+      + 'settlement notices will wake you. Only allSettled=true authorizes the consolidated '
+      + 'next-step planning.',
     parameters: {
       cardId: { type: 'string', required: true },
       taskId: { type: 'string', description: 'Task id from the board_dispatch result; omit to settle by bee' },
