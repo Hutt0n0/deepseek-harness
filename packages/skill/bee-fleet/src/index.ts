@@ -331,9 +331,14 @@ export function apply(ctx: Context, config: Config): void {
               results.push({ id: beeId, depth, outcome: error instanceof Error ? error.message.slice(0, 80) : 'skipped' })
             }
           }
-          // Stop the commander itself last (its turn aborts, pending inbox
-          // kept — same semantics as the platform session/cancel).
-          rootAgent.cancel({ kind: 'user' }, { keepInbox: true })
+          // Stop the commander itself last (its turn aborts — same semantics
+          // as the platform session/cancel). For the ROOT the inbox is
+          // deliberately CLEARED (keepInbox omitted): pending settlement
+          // notices and queued messages would otherwise immediately wake it
+          // into a next turn, which is exactly the "bees stopped but the
+          // commander kept working" report. Bees keep their inboxes — their
+          // pending work belongs to the task, not to this stop.
+          rootAgent.cancel({ kind: 'user' })
           results.push({ id: rootSessionId, depth: 0, outcome: 'stopped' })
         }
         ctx.logger.info('rt-bee-fleet: stopAll for %s — %d target(s) signalled', rootSessionId, results.length)
