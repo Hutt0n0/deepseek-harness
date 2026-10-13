@@ -90,11 +90,14 @@ function deriveCards(
  * card routes through the existing `subagentchat` right-sidebar resource.
  */
 export function SwarmView({
-  useSessions, sessionId, openBee, refresh, watch, t,
+  useSessions, sessionId, openBee, refresh, watch, stopAll, t,
 }: ConvViewProps & InjectFace<SwarmViewInjected> & PropsLocale<typeof NS>) {
   const byId = useSessions(state => state.byId)
   const catalog = useSessions(state => state.subagentsByParent[sessionId])
   const [filter, setFilter] = useState<SwarmFilter>('all')
+  const [confirmStop, setConfirmStop] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const [stopError, setStopError] = useState<string | undefined>(undefined)
   // While this wall is mounted it is a live catalog consumer: registration
   // makes membership events (a bee spawning, settling) refetch this parent's
   // catalog, so cards appear without a manual refresh.
@@ -138,12 +141,46 @@ export function SwarmView({
         </span>
         <button
           type="button"
+          className={css.stopBtn}
+          disabled={runningCount === 0 || stopping}
+          onClick={() => { setConfirmStop(true) }}
+        >
+          {stopping ? t('swarm.stopping') : t('swarm.stopAll')}
+        </button>
+        <button
+          type="button"
           className={css.refreshBtn}
           onClick={() => { refresh() }}
         >
           {t('swarm.refresh')}
         </button>
       </div>
+      {stopError !== undefined && (
+        <div className={css.error}>{t('swarm.stopFailed')}: {stopError}</div>
+      )}
+      {confirmStop && (
+        <div className={css.confirmBar} data-rt-swarm-confirm="">
+          <span>{t('swarm.stopAllConfirm', { count: runningCount })}</span>
+          <button type="button" className={css.confirmNo} onClick={() => { setConfirmStop(false) }}>
+            {t('swarm.confirmNo')}
+          </button>
+          <button
+            type="button"
+            className={css.confirmYes}
+            onClick={() => {
+              setConfirmStop(false)
+              setStopping(true)
+              void stopAll().then(() => {
+                refresh()
+              }, (cause: unknown) => {
+                setStopError(cause instanceof Error ? cause.message : String(cause))
+              }).finally(() => { setStopping(false) })
+            }}
+          >
+            {t('swarm.confirmYes')}
+          </button>
+        </div>
+      )}
       {catalog?.state === 'error' && (
         <div className={css.error}>{t('swarm.loadFailed')}{catalog.error === null ? '' : `: ${catalog.error.message}`}</div>
       )}
@@ -228,4 +265,7 @@ export interface SwarmViewInjected {
   refresh: () => void
   /** Register/unregister this wall as a live catalog consumer for its session. */
   watch: (open: boolean) => void
+  /** Cascade stop: abort the commander's turn and every descendant bee's
+   * active turn (keepInbox — bees stay continuable for resume). */
+  stopAll: () => Promise<{ id: string; depth: number; outcome: string }[]>
 }

@@ -123,6 +123,12 @@ export interface FleetRoutesDeps {
   readonly set: (bees: readonly BeeSpec[]) => Promise<void>
   /** Platform tool names available for the toolbox editor. */
   readonly knownTools: () => readonly string[]
+  /** Cascade stop: abort the commander's active turn and every descendant
+   * bee's active turn (keepInbox semantics — bees stay continuable). */
+  readonly stopAll: (rootSessionId: string) => Promise<{
+    readonly rootSessionId: string
+    readonly results: readonly { readonly id: string; readonly depth: number; readonly outcome: string }[]
+  }>
 }
 
 /** Build the prefix-route handler for /rt-fleet/<method>. */
@@ -157,6 +163,14 @@ export function handleFleetRoute(deps: FleetRoutesDeps): (req: IncomingMessage, 
         }
         await deps.set(bees)
         writeJson(res, 200, { ok: true })
+        return
+      }
+      if (method === 'stopAll') {
+        const body = await readJson(req)
+        const rootSessionId = typeof body.rootSessionId === 'string' ? body.rootSessionId.trim() : ''
+        if (rootSessionId === '') throw new Error('rootSessionId is required')
+        const result = await deps.stopAll(rootSessionId)
+        writeJson(res, 200, { ok: true, ...result })
         return
       }
       writeJson(res, 404, { ok: false, error: `unknown method "${method}"` })

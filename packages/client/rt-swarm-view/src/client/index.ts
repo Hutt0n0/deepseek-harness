@@ -65,6 +65,16 @@ export function apply(ctx: ClientContext): void {
       refresh() {
         void ctx.sessions.refreshSubagents(sessionId)
       },
+      async stopAll() {
+        const response = await fetch('/rt-fleet/stopAll', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ rootSessionId: sessionId }),
+        })
+        const wire = await response.json() as { ok: boolean; error?: string; results?: unknown }
+        if (!wire.ok) throw new Error(wire.error ?? `stopAll failed: ${response.status}`)
+        return wire.results as { id: string; depth: number; outcome: string }[]
+      },
     }),
   }, SwarmView))
 }

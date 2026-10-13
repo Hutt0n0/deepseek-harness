@@ -268,6 +268,62 @@
   font: var(--dsw-font-xxs-12) var(--dsw-font-family);
 }
 
+
+/* ── Stop-task button + inline confirm bar ─────────────────────────────── */
+
+.stopBtn {
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.stopBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+}
+
+.stopBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.confirmBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  border-radius: 12px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 6%, transparent);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+}
+
+.confirmNo {
+  margin-left: auto;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: var(--dsw-font-xxs-12) var(--dsw-font-family);
+  cursor: pointer;
+}
+
+.confirmYes {
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font: var(--dsw-font-xxs-strong-12) var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-state-error-primary);
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card,
   .filterPill,

@@ -24,7 +24,7 @@ export type { BeeSpec, BeeEntry, FleetSetBody, FleetError } from './types.ts'
 
 export const name = 'rt-bee-fleet'
 
-export const inject = ['webServer', 'webRuntime', 'tools'] as const
+export const inject = ['webServer', 'webRuntime', 'tools', 'agents', 'subagents'] as const
 
 export interface Config {
   /** Workspace root holding the fleet definition (fleet/fleet.yaml). */
@@ -294,6 +294,51 @@ export function apply(ctx: Context, config: Config): void {
         return Promise.resolve()
       },
       knownTools,
+      stopAll: async (rootSessionId: string) => {
+        // Cascade stop: the commander agent is the live root of the whole
+        // bee tree; ancestor authority covers every depth (ancestry is
+        // resolved upward from each bee through parentSession links, and
+        // the root is always on it). Cancel the ROOT LAST — interrupting
+        // bees first keeps their settlement notices flowing to a live
+        // parent, and keepInbox preserves pending work for resume.
+        interface StopServices {
+          agents: { get: (id: string) => { session: { id: string }; cancel: (cause: unknown, opts?: unknown) => void } | undefined }
+          subagents?: {
+            listDescendants: (id: string) => Promise<readonly { id: string; depth: number }[]>
+            interrupt: (id: string, authority: unknown) => void
+          }
+        }
+        const services = ctx.get('agents') === undefined ? undefined : ({
+          agents: { get: (agentId: string) => (ctx.get('agents') as unknown as StopServices['agents']).get(agentId) },
+          subagents: ctx.get('subagents') as StopServices['subagents'],
+        } as StopServices)
+        const results: { id: string; depth: number; outcome: string }[] = []
+        const rootAgent = services?.agents.get(rootSessionId)
+        if (services?.subagents !== undefined && rootAgent !== undefined) {
+          let descendants: readonly { id: string; depth: number }[] = []
+          try {
+            descendants = await services.subagents.listDescendants(rootSessionId)
+          } catch (error) {
+            ctx.logger.warn('rt-bee-fleet: stopAll listDescendants failed: %s', error instanceof Error ? error.message : String(error))
+          }
+          for (const { id: beeId, depth } of descendants) {
+            try {
+              services.subagents.interrupt(beeId, { kind: 'ancestor', agent: rootAgent })
+              results.push({ id: beeId, depth, outcome: 'stopped' })
+            } catch (error) {
+              // An idle bee (disposed activation) or one owned elsewhere —
+              // record rather than fail the whole cascade.
+              results.push({ id: beeId, depth, outcome: error instanceof Error ? error.message.slice(0, 80) : 'skipped' })
+            }
+          }
+          // Stop the commander itself last (its turn aborts, pending inbox
+          // kept — same semantics as the platform session/cancel).
+          rootAgent.cancel({ kind: 'user' }, { keepInbox: true })
+          results.push({ id: rootSessionId, depth: 0, outcome: 'stopped' })
+        }
+        ctx.logger.info('rt-bee-fleet: stopAll for %s — %d target(s) signalled', rootSessionId, results.length)
+        return { rootSessionId, results }
+      },
     }),
   })
 

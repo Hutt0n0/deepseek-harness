@@ -27,6 +27,12 @@ export const zh = {
   'swarm.kindPivot': '内网横向',
   'swarm.kindOther': '工蜂',
   'swarm.subbeeTag': '子蜂',
+  'swarm.stopAll': '停止任务',
+  'swarm.stopping': '停止中…',
+  'swarm.stopAllConfirm': '将停止主智能体和 {count} 只在飞工蜂的当前工作（蜂保留可续跑）。确认停止？',
+  'swarm.confirmYes': '确认停止',
+  'swarm.confirmNo': '取消',
+  'swarm.stopFailed': '停止失败',
 } as const
 
 export type SwarmKey = keyof typeof zh
@@ -56,4 +62,10 @@ export const en: Record<SwarmKey, string> = {
   'swarm.kindPivot': 'Lateral',
   'swarm.kindOther': 'Bee',
   'swarm.subbeeTag': 'Sub-bee',
+  'swarm.stopAll': 'Stop task',
+  'swarm.stopping': 'Stopping…',
+  'swarm.stopAllConfirm': 'This aborts the commander\'s active turn and {count} running bees (bees stay continuable for resume). Stop now?',
+  'swarm.confirmYes': 'Stop now',
+  'swarm.confirmNo': 'Cancel',
+  'swarm.stopFailed': 'Stop failed',
 }
